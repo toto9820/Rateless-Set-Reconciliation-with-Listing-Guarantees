@@ -104,13 +104,15 @@ class IBLT:
 
         self.cells_queue.put("end")
 
-    def receive(self, sender_cells: List[Cell]) -> List[int]:
+    def receive(self, sender_cells: List[Cell], set_inside_set: bool = True) -> List[int]:
         """
         Receives transmitted cells and performs decoding to retrieve 
         the symmetric difference.
 
         Parameters:
         - received_cells (List[int]): List of sender cells.
+        - set_inside_set (bool): assumption that receiver' set includes
+        sender' set holds or not.
 
         Returns:
         - Set[int]: List of integers representing the symmetric difference.
@@ -159,6 +161,12 @@ class IBLT:
             if symbol == None:
                 break
 
+            # Extreme case - symbol is prime number - so more
+            # cells are required for listing to success.
+            if symbol in self.primes:
+                if self.primes[self.receive_iterations-1] < symbol:
+                    return []
+
             # Remove from sender IBLT
             cell_idx = 0
             for p in self.primes[:self.receive_iterations]:
@@ -167,11 +175,22 @@ class IBLT:
 
                 cell_idx += p - symbol % p
             
-            # Remove from receiver IBLT
+            # Remove from receiver IBLT if exists in sender IBLT.
+            # Otherwise, add the symbol to the receiver IBLT.
+            # In the end the goal is to get IBLT which represents 
+            # the symmetric difference and by listing getting the elements
+            # of the symmetric difference.
+            flag = self.is_symbol_inside_iblt(self.receiver_cells, symbol)
+            
             cell_idx = 0
             for p in self.primes[:self.receive_iterations]:
                 cell_idx += symbol % p
-                self.receiver_cells[cell_idx].remove(symbol)
+
+                if flag == True:
+                    self.receiver_cells[cell_idx].remove(symbol)
+
+                else:
+                    self.receiver_cells[cell_idx].add(symbol)
 
                 cell_idx += p - symbol % p
 
@@ -181,18 +200,46 @@ class IBLT:
         # sender and receiver. 
         symmetric_difference = self.listing(self.receiver_cells)
 
-        if len(symmetric_difference) < (self.n - self.d):
-            return []
+        if set_inside_set:
+            if len(symmetric_difference) < (self.n - self.d):
+                return []
         
         return symmetric_difference
+    
+    def is_symbol_inside_iblt(self, cells: List[Cell], symbol: int) -> bool:
+        """
+        Checks for 1 for each chunk of cells for specific symbol.
+        
+        Parameters:
+        - cells (List[Cell]): List of cells to perform the check on.
+        - symbol (int): source symbol to check if might be in IBLT's cells.
+
+        Returns:
+        - bool: The query answer of symbol might be in IBLT.
+        """
+        if self.method == "EGH":
+            cell_idx = 0
+            for p in self.primes[:self.receive_iterations]:
+                cell_idx += symbol % p
+
+                if cells[cell_idx].counter == 0:
+                    return False
+
+                cell_idx += p - symbol % p
+            
+            return True
+
+        else:
+            raise ValueError("Not implemented")
 
 
-    def peeling_decoder(self, cells) -> int:
+
+    def peeling_decoder(self, cells: List[Cell]) -> int:
         """
         Extracts a soruce symbol from IBLT.
 
         Parameters:
-        - cells (List[cells]): List of cells to perform the peeling on.
+        - cells (List[Cell]): List of cells to perform the peeling on.
 
         Returns:
         - int: The source symbol value.
