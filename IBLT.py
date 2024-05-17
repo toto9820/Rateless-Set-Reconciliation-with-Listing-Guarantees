@@ -181,7 +181,7 @@ class IBLT:
         # sender and receiver. 
         symmetric_difference = self.listing(self.receiver_cells)
 
-        if len(symmetric_difference) < self.d:
+        if len(symmetric_difference) < (self.n - self.d):
             return []
         
         return symmetric_difference
