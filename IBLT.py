@@ -161,11 +161,10 @@ class IBLT:
             if symbol == None:
                 break
 
-            # Extreme case - symbol is prime number - so more
+            # Extreme case - symbol is bigger than current max prime - so more
             # cells are required for listing to success.
-            if symbol in self.primes:
-                if self.primes[self.receive_iterations-1] < symbol:
-                    return []
+            if self.primes[self.receive_iterations-1] < symbol:
+                return []
 
             # Remove from sender IBLT
             cell_idx = 0

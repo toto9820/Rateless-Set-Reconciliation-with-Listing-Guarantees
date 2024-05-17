@@ -71,7 +71,7 @@ def export_results_to_csv(results: List[Tuple[int, float, int]], csv_filename: s
 if __name__ == "__main__":
     # Example usage
     #sender_set = set([1, 5, 8, 11, 15, 21, 23])
-    sender_set = set([1, 8, 23])
+    sender_set = set([1, 8, 24])
     # primes in 1 - 150.
     primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 31, 37, 41, 43, 47, 53, 59, 
     61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 
