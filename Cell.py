@@ -3,7 +3,7 @@ from hashlib import sha256
 class Cell:
     def __init__(self):
         """
-        Represents a cell of an IBLT
+        Represents a cell of an IBLTWithEGH
         """
         # Represents the sum (xor of source symbols)
         self.sum = 0
