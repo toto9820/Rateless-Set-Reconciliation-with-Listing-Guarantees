@@ -54,5 +54,5 @@ class Cell:
         """
         Check if the cell is pure - containing one element.
         """
-        return self.counter == 1
+        return (self.counter == 1 or self.counter == -1) and (sha256(bytes(self.sum)).digest() == self.checksum)
     

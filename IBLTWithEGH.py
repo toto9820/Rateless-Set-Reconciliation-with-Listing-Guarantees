@@ -25,7 +25,6 @@ class IBLTWithEGH:
         self.ack_queue = Queue()
         self.trasmit_iterations = 0
         self.receive_iterations = 0
-        self.d = 0
         self.sender_cells = []
         self.receiver_cells = []
     
@@ -108,17 +107,8 @@ class IBLTWithEGH:
         self.sender_cells.extend(sender_cells)
 
         if self.receive_iterations == 1:
-            # Calculate d - number of elements received from sender.
-            self.d = sum([c.counter for c in sender_cells])
-
-        # Check if free zone is guaranteed.
-        # If not, more IBLTWithEGH cells are needed.
-        primes_mul = reduce(lambda x, y: x*y, self.primes[:self.receive_iterations])
-        lower_bound = self.n**self.d
-
-        # Free zone is not guaranteed.
-        if lower_bound > primes_mul:
-            return []
+            # Calculate number of elements received from sender.
+            self.sender_set_size = sum([c.counter for c in sender_cells])
         
         # Create IBLT for the receiver.
         self.receiver_cells = []
@@ -132,52 +122,34 @@ class IBLTWithEGH:
                 if mapping_value == 1:
                     self.receiver_cells[row].add(symbol)
 
-        while True:
-            symbol = self.peeling_decoder(self.sender_cells)
+        for cell_idx in range(len(self.receiver_cells)):
+            self.receiver_cells[cell_idx].sum ^=  self.sender_cells[cell_idx].sum
 
-            if symbol == None:
-                break
-
-            # Extreme case - symbol is bigger than current max prime - so more
-            # cells are required for listing to success.
-            if self.primes[self.receive_iterations-1] < symbol:
-                return []
-
-            # Remove from sender IBLTWithEGH
-            cell_idx = 0
-            for p in self.primes[:self.receive_iterations]:
-                cell_idx += symbol % p
-                self.sender_cells[cell_idx].remove(symbol)
-
-                cell_idx += p - symbol % p
+            if self.receiver_cells[cell_idx].checksum == 0:
+                self.receiver_cells[cell_idx].checksum = self.sender_cells[cell_idx].checksum
             
-            # Remove from receiver IBLTWithEGH if exists in sender IBLTWithEGH.
-            # Otherwise, add the symbol to the receiver IBLTWithEGH.
-            # In the end the goal is to get IBLTWithEGH which represents 
-            # the symmetric difference and by listing getting the elements
-            # of the symmetric difference.
-
-            flag = self.is_symbol_inside_IBLTWithEGH(self.receiver_cells, symbol)
+            elif self.sender_cells[cell_idx].checksum == 0:
+                self.receiver_cells[cell_idx].checksum = self.receiver_cells[cell_idx].checksum
             
-            cell_idx = 0
-            for p in self.primes[:self.receive_iterations]:
-                cell_idx += symbol % p
+            else:
+                self.receiver_cells[cell_idx].checksum =  bytes(a ^ b for a, b in zip(self.receiver_cells[cell_idx].checksum, self.sender_cells[cell_idx].checksum))
+            
+            self.receiver_cells[cell_idx].counter -= self.sender_cells[cell_idx].counter
 
-                if flag == True:
-                    self.receiver_cells[cell_idx].remove(symbol)
+        # Check if free zone is guaranteed for BILT of symmetric difference.
+        # If not, more IBLTWithEGH cells are needed.
+        primes_mul = reduce(lambda x, y: x*y, self.primes[:self.receive_iterations])
+        symmetric_difference_size = sum([abs(c.counter) for c in self.receiver_cells[:2]])
+        lower_bound = self.n**symmetric_difference_size
 
-                else:
-                    self.receiver_cells[cell_idx].add(symbol)
-
-                cell_idx += p - symbol % p
+        # Free zone is not guaranteed.
+        if lower_bound > primes_mul:
+            return []
 
         symmetric_difference = self.listing(self.receiver_cells)
-
-        if len(symmetric_difference) < (len(self.symbols) - self.d):
-            return []
         
         # Empty symmetric difference.
-        elif not symmetric_difference:
+        if not symmetric_difference:
             return ["empty set"]
     
         return symmetric_difference
