@@ -4,7 +4,7 @@ from typing import List, Set, Tuple
 from IBLTWithEGH import IBLTWithEGH
 
 
-def benchmark_set_reconciliation_egh(sender_set: Set[int], 
+def benchmark_set_reconciliation_egh(symmetric_difference_size:int, 
                                  primes: List[int], num_trials: int, 
                                  export_to_csv: bool = False, 
                                  csv_filename: str = "results.csv",
@@ -13,18 +13,22 @@ def benchmark_set_reconciliation_egh(sender_set: Set[int],
     results = []
 
     for trial in range(1, num_trials+1):
-        universe_set = set(range(1, 50*trial + 1))
+        universe_list = list(range(1, 100*trial + 1))
+        
 
         if set_inside_set:
-            receiver_set = universe_set
+            receiver_list = universe_list
+            sender_list = universe_list[symmetric_difference_size:]
         else:
-            # receiver_set = set([7, 16, 21])
-            receiver_set = set(range(1, 5 * trial + 1))
-            print("receiver_set: ", receiver_set)
-        
-        universe_size = len(universe_set)
-        sender = IBLTWithEGH(sender_set, universe_size, primes)
-        receiver = IBLTWithEGH(receiver_set, universe_size, primes)
+            receiver_list = universe_list[:symmetric_difference_size]
+            print("receiver_list: ", receiver_list)
+            sender_list = receiver_list[-symmetric_difference_size:]
+            sender_list.extend(universe_list[len(receiver_list):len(receiver_list)+symmetric_difference_size])
+            print("sender_list: ", sender_list)
+
+        universe_size = len(universe_list)
+        sender = IBLTWithEGH(set(sender_list), universe_size, primes)
+        receiver = IBLTWithEGH(set(receiver_list), universe_size, primes)
 
         sender.generate_egh_mapping()
         receiver.generate_egh_mapping()
@@ -67,15 +71,6 @@ def export_results_to_csv(results: List[Tuple[int, float, int]], csv_filename: s
         writer.writerows(results)
 
 if __name__ == "__main__":
-    # d = 1
-    sender_set_1 = set([8])
-
-    # d = 5
-    sender_set_5 = set([1, 4, 8, 15, 23])
-
-    # d = 20
-    sender_set_20 = set(range(1, 21))
-
     # primes in 1 - 400 (for EGH).
     primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 31, 37, 41, 43, 47, 53, 59, 
     61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 
@@ -84,17 +79,21 @@ if __name__ == "__main__":
     307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 
     389, 397]
 
+    # num_trials = 10 
     num_trials = 10 
 
     print("IBLT + EGH:")
 
-    for sender_set in [sender_set_1, sender_set_5, sender_set_20]:
-        # benchmark_set_reconciliation_egh(sender_set, primes, num_trials, 
-        #                             export_to_csv=True, 
-        #                             csv_filename=f"egh_results/egh_results_receiver_includes_sender_d_{len(sender_set)}.csv", 
-        #                             set_inside_set = True)
-
-        benchmark_set_reconciliation_egh(sender_set, primes, num_trials, 
+    # symmetric_difference_size is parameter d.
+    for symmetric_difference_size in [1, 5, 10, 20]:
+        benchmark_set_reconciliation_egh(symmetric_difference_size, primes, 
+                                    num_trials, 
                                     export_to_csv=True, 
-                                    csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_d_{len(sender_set)}.csv", 
+                                    csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                                    set_inside_set = True)
+
+        benchmark_set_reconciliation_egh(symmetric_difference_size, primes, 
+                                    num_trials, 
+                                    export_to_csv=True, 
+                                    csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
                                     set_inside_set = False)
