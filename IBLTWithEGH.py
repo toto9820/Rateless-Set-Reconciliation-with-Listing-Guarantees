@@ -4,7 +4,7 @@ from queue import Queue
 from functools import reduce
 
 class IBLTWithEGH:
-    def __init__(self, symbols: Set[int], n: int, primes: List[int]):
+    def __init__(self, symbols: Set[int], n: int):
         """
         Initializes the Invertible Bloom Lookup Table with
         combinatorial method EGH.
@@ -12,141 +12,196 @@ class IBLTWithEGH:
         Parameters:
         - symbols (Set[int]): set of source symbols.
         - n (int) - universe size.
-        - primes (List[int]): list of primes for mapping matrix.
         """
-
+        # The sender/receiver set.
         self.symbols = symbols 
-        # universe size
+        # Universe size
         self.n = n 
-        # set size 
-        self.primes = primes 
-        self.mapping_matrix = [[0 for _ in range(n)] for _ in range(sum(primes))]
+        # Finite array of primes.
+        self.primes = []
+        # The mapping of each symbol to IBLT cells.
+        self.mapping_matrix = []
+        # The link to pass IBLT cells from sender to receiver (simulation
+        # of a real communication link)
         self.cells_queue = Queue()
+        # The link to pass Acknowledgement (ACK) to stop sending cells 
+        # or Negative Acknowledgement (NACK) to send more cells
+        #  from receiver to sender (simulation
+        # of a real communication link)
         self.ack_queue = Queue()
+        # Number of iterations the sender transmit cells to the receiver
+        # (Sender side)
         self.trasmit_iterations = 0
+        # Number of iterations the receiver gets cells from the sender
+        # (Receiver side)
         self.receive_iterations = 0
-        self.sender_cells = []
-        self.receiver_cells = []
+        # All IBLT cells of sender that the receiver holds.
+        self.iblt_sender_cells = []
+        # All IBLT cells the receiver holds.
+        self.iblt_receiver_cells = []
+        # IBLT cells of the symmetric difference.
+        self.iblt_diff_cells = []
+
+    def is_prime(self, num: int):
+        """
+        Checks if the current num is a prime number.
+
+        Parameters:
+        - num (int): The candidate to be a prime number.
+
+        Returns:
+        - bool: Whether num is a prime number or not.
+        """
+        if num < 2:
+            return False
+        for i in range(2, int(num ** 0.5) + 1):
+            if num % i == 0:
+                return False
+        return True
+
+    def get_next_prime(self, prev_prime: int):
+        """
+        Returns the next prime number after the given start value.
+        If start is not provided or is less than 2, it starts from 2.
+
+        Parameters:
+        - prev_prime (int): The previous prime number.
+
+        Returns:
+        - int: The next prime number.
+        """
+        next_num = prev_prime + 1
+
+        while not self.is_prime(next_num):
+            next_num += 1
+
+        return next_num
     
-    def generate_egh_mapping(self) -> None:
+    def generate_egh_mapping(self, iteration: int) -> None:
         """
-        Generates a mapping matrix for EGH.
+        Generates part of the mapping matrix for EGH where the number
+        of rows depends on the iteration number. 
         """
-        row = 0
+        prime = None
+
+        if self.primes == []:
+            prime = 2
+        else:
+            prime = self.get_next_prime(self.primes[-1])
+
+        self.primes.append(prime)
+
+        self.mapping_matrix = [[0 for _ in range(self.n)] 
+                                for _ in range(prime)] 
 
         for symbol in range(1, self.n+1):
-            row = 0
 
-            for prime in self.primes:
-                res = symbol % prime
-                
-                for i in range(prime):
-                    if i == res:
-                        self.mapping_matrix[row][symbol-1] = 1
-                    else:
-                        self.mapping_matrix[row][symbol-1] = 0
-
-                    row += 1
-
-
+            res = symbol % prime
+        
+            for i in range(prime):
+                if i == res:
+                    self.mapping_matrix[i][symbol-1] = 1
+                else:
+                    self.mapping_matrix[i][symbol-1] = 0
+            
     def transmit(self) -> None:
         """
-        Sends each iteration amount of cells of the IBLT to the receiver.
+        Sends each iteration amount of IBLT cells of the sender to the receiver.
         """
-
-        if self.trasmit_iterations >= len(self.primes):
-            self.cells_queue.put("end")
-            return
-
         if not self.ack_queue.empty():
             ack = self.ack_queue.get()
 
+            # Receiver tells to stop sending cells.
             if ack == "stop":
                 self.cells_queue.put("terminated")
                 return
+            
+        self.trasmit_iterations += 1
 
-        # Current row to start in mapping matrix.
-        row = sum(self.primes[:self.trasmit_iterations])
+        self.generate_egh_mapping(self.trasmit_iterations)
 
         cells = []
 
-        for i in range(self.primes[self.trasmit_iterations]):
+        for i in range(len(self.mapping_matrix)):
             cells.append(Cell())
 
-        for i in range(self.primes[self.trasmit_iterations]):
+        for i in range(len(self.mapping_matrix)):
             for symbol in self.symbols:
-                mapping_value = self.mapping_matrix[row][symbol-1]
+                mapping_value = self.mapping_matrix[i][symbol-1]
 
                 if mapping_value == 1:
                     cells[i].add(symbol)
-
-            row += 1
-
-        self.trasmit_iterations += 1
 
         for c in cells:
             self.cells_queue.put(c)
 
         self.cells_queue.put("end")
 
-    def receive(self, sender_cells: List[Cell]) -> List[int]:
+    def receive(self, iblt_sender_cells: List[Cell]) -> List[int]:
         """
         Receives transmitted cells and performs decoding to retrieve 
         the symmetric difference.
 
         Parameters:
-        - received_cells (List[int]): List of sender cells.
+        - iblt_sender_cells (List[int]): List of IBLT cells from the sender.
 
         Returns:
         - Set[int]: List of integers representing the symmetric difference.
         """
-        if not sender_cells:
+        if not iblt_sender_cells:
             raise ValueError("No cells received from sender - increase prime array.")
 
         self.receive_iterations += 1
-        self.sender_cells.extend(sender_cells)
+        self.iblt_sender_cells.extend(iblt_sender_cells)
 
         if self.receive_iterations == 1:
             # Calculate number of elements received from sender.
-            self.sender_set_size = sum([c.counter for c in sender_cells])
-        
-        # Create IBLT for the receiver.
-        self.receiver_cells = []
-        for i in range(sum(self.primes[:self.receive_iterations])):
-            self.receiver_cells.append(Cell())
+            self.sender_set_size = sum([c.counter for c in iblt_sender_cells])
 
-        for row in range(len(self.receiver_cells)):
+        self.generate_egh_mapping(self.receive_iterations)
+
+        prev_rows_cnt = len(self.iblt_receiver_cells)
+        
+        # Create IBLT cells for the receiver.        
+        for i in range(len(self.mapping_matrix)):
+            self.iblt_receiver_cells.append(Cell())   
+
+        for row in range(len(self.mapping_matrix)):
             for symbol in self.symbols:
                 mapping_value = self.mapping_matrix[row][symbol-1]
 
                 if mapping_value == 1:
-                    self.receiver_cells[row].add(symbol)
+                    self.iblt_receiver_cells[prev_rows_cnt+row].add(symbol)
+        
+        self.iblt_diff_cells = []
+             
+        for cell_idx in range(len(self.iblt_receiver_cells)):
+            self.iblt_diff_cells.append(Cell())  
 
-        for cell_idx in range(len(self.receiver_cells)):
-            self.receiver_cells[cell_idx].sum ^=  self.sender_cells[cell_idx].sum
+            self.iblt_diff_cells[cell_idx].sum =  self.iblt_receiver_cells[cell_idx].sum ^ self.iblt_sender_cells[cell_idx].sum
 
-            if self.receiver_cells[cell_idx].checksum == 0:
-                self.receiver_cells[cell_idx].checksum = self.sender_cells[cell_idx].checksum
+            if self.iblt_receiver_cells[cell_idx].checksum == 0:
+                self.iblt_diff_cells[cell_idx].checksum = self.iblt_sender_cells[cell_idx].checksum
             
-            elif self.sender_cells[cell_idx].checksum == 0:
-                self.receiver_cells[cell_idx].checksum = self.receiver_cells[cell_idx].checksum
+            elif self.iblt_sender_cells[cell_idx].checksum == 0:
+                self.iblt_diff_cells[cell_idx].checksum = self.iblt_receiver_cells[cell_idx].checksum
             
             else:
-                self.receiver_cells[cell_idx].checksum =  bytes(a ^ b for a, b in zip(self.receiver_cells[cell_idx].checksum, self.sender_cells[cell_idx].checksum))
+                self.iblt_diff_cells[cell_idx].checksum =  bytes(a ^ b for a, b in zip(self.iblt_receiver_cells[cell_idx].checksum, self.iblt_sender_cells[cell_idx].checksum))
             
-            self.receiver_cells[cell_idx].counter -= self.sender_cells[cell_idx].counter
+            self.iblt_diff_cells[cell_idx].counter -= self.iblt_receiver_cells[cell_idx].counter - self.iblt_sender_cells[cell_idx].counter
 
         # Check if free zone is guaranteed for BILT of symmetric difference.
         # If not, more IBLTWithEGH cells are needed.
         primes_mul = reduce(lambda x, y: x*y, self.primes[:self.receive_iterations])
-        symmetric_difference_size = sum([abs(c.counter) for c in self.receiver_cells[:2]])
+        symmetric_difference_size = sum([abs(c.counter) for c in self.iblt_diff_cells[:2]])
         lower_bound = self.n**symmetric_difference_size
 
         # Free zone is not guaranteed.
         if lower_bound > primes_mul:
             return []
 
-        symmetric_difference = self.listing(self.receiver_cells)
+        symmetric_difference = self.listing(self.iblt_diff_cells)
         
         # Empty symmetric difference.
         if not symmetric_difference:

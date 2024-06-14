@@ -2,10 +2,12 @@ import csv
 import os
 from typing import List, Set, Tuple
 from IBLTWithEGH import IBLTWithEGH
+from Method import Method
 
 
-def benchmark_set_reconciliation_egh(symmetric_difference_size:int, 
-                                 primes: List[int], num_trials: int, 
+def benchmark_set_reconciliation(symmetric_difference_size:int, 
+                                 method:Method,
+                                 num_trials: int, 
                                  export_to_csv: bool = False, 
                                  csv_filename: str = "results.csv",
                                  set_inside_set: bool = True):
@@ -27,11 +29,13 @@ def benchmark_set_reconciliation_egh(symmetric_difference_size:int,
             print("sender_list: ", sender_list)
 
         universe_size = len(universe_list)
-        sender = IBLTWithEGH(set(sender_list), universe_size, primes)
-        receiver = IBLTWithEGH(set(receiver_list), universe_size, primes)
 
-        sender.generate_egh_mapping()
-        receiver.generate_egh_mapping()
+        if method == Method.EGH:
+            sender = IBLTWithEGH(set(sender_list), universe_size)
+            receiver = IBLTWithEGH(set(receiver_list), universe_size)
+
+        elif method == Method.BINARY_COVERING_ARRAY:
+            continue
 
         symmetric_difference = []
 
@@ -55,7 +59,7 @@ def benchmark_set_reconciliation_egh(symmetric_difference_size:int,
                 sender.ack_queue.put("stop")
                 break
 
-        total_cells_transmitted = len(receiver.receiver_cells)
+        total_cells_transmitted = len(receiver.iblt_sender_cells)
         results.append((trial, universe_size, total_cells_transmitted))
 
         print(f"Symmetric difference: {symmetric_difference}")
@@ -71,29 +75,38 @@ def export_results_to_csv(results: List[Tuple[int, float, int]], csv_filename: s
         writer.writerows(results)
 
 if __name__ == "__main__":
-    # primes in 1 - 400 (for EGH).
-    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 31, 37, 41, 43, 47, 53, 59, 
-    61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 
-    139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 
-    223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
-    307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 
-    389, 397]
-
     # num_trials = 10 
-    num_trials = 10 
+    num_trials = 1 
 
     print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
     for symmetric_difference_size in [1, 5, 10, 20]:
-        benchmark_set_reconciliation_egh(symmetric_difference_size, primes, 
-                                    num_trials, 
-                                    export_to_csv=True, 
-                                    csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-                                    set_inside_set = True)
+        benchmark_set_reconciliation(symmetric_difference_size, 
+                                     Method.EGH,
+                                     num_trials, 
+                                     export_to_csv=False, 
+                                     csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                                     set_inside_set = True)
 
-        benchmark_set_reconciliation_egh(symmetric_difference_size, primes, 
-                                    num_trials, 
-                                    export_to_csv=True, 
-                                    csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-                                    set_inside_set = False)
+        # benchmark_set_reconciliation(symmetric_difference_size, 
+        #                             num_trials, 
+        #                             export_to_csv=True, 
+        #                             csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                             set_inside_set = False)
+        
+
+    # print("IBLT + Covering Arrays:")
+
+    # for symmetric_difference_size in [1, 5, 10, 20]:
+    #     benchmark_set_reconciliation(symmetric_difference_size, 
+    #                                 num_trials, 
+    #                                 export_to_csv=True, 
+    #                                 csv_filename=f"covering_arr_results/covering_arr_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+    #                                 set_inside_set = True)
+
+    #     benchmark_set_reconciliation(symmetric_difference_size, 
+    #                                 num_trials, 
+    #                                 export_to_csv=True, 
+    #                                 csv_filename=f"covering_arr_results/covering_arr_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+    #                                 set_inside_set = False)
