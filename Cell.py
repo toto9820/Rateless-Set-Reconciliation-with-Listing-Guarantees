@@ -48,7 +48,10 @@ class Cell:
 
         self.checksum = xor_result
 
-        self.counter -= 1
+        if self.counter > 0:
+            self.counter -= 1
+        else:
+            self.counter += 1       
 
     def is_pure_cell(self) -> bool:
         """
