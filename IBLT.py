@@ -6,7 +6,7 @@ from functools import reduce
 class IBLT:
     def __init__(self, symbols: Set[int], n: int):
         """
-        Initializes the Invertible Bloom Lookup Table.
+        Initializes the Rateless Invertible Bloom Lookup Table.
 
         Parameters:
         - symbols (Set[int]): set of source symbols.
@@ -135,64 +135,76 @@ class IBLT:
                 if mapping_value == 1:
                     self.iblt_receiver_cells[prev_rows_cnt+row].add(symbol)
         
-        self.iblt_diff_cells = []
-             
-        for cell_idx in range(len(self.iblt_receiver_cells)):
-            self.iblt_diff_cells.append(Cell())  
-
-            self.iblt_diff_cells[cell_idx].sum =  self.iblt_receiver_cells[cell_idx].sum ^ self.iblt_sender_cells[cell_idx].sum
-
-            if self.iblt_receiver_cells[cell_idx].checksum == 0:
-                self.iblt_diff_cells[cell_idx].checksum = self.iblt_sender_cells[cell_idx].checksum
-            
-            elif self.iblt_sender_cells[cell_idx].checksum == 0:
-                self.iblt_diff_cells[cell_idx].checksum = self.iblt_receiver_cells[cell_idx].checksum
-            
-            else:
-                self.iblt_diff_cells[cell_idx].checksum =  bytes(a ^ b for a, b in zip(self.iblt_receiver_cells[cell_idx].checksum, self.iblt_sender_cells[cell_idx].checksum))
-            
-            self.iblt_diff_cells[cell_idx].counter -= self.iblt_receiver_cells[cell_idx].counter - self.iblt_sender_cells[cell_idx].counter
+        self.iblt_diff_cells = self.calc_iblt_diff(self.iblt_sender_cells,
+                                                   self.iblt_receiver_cells)      
 
         # Check if free zone is guaranteed for IBLT of symmetric difference.
         # If not, more IBLT cells are needed.
-        if self.stopping_condition_exists:
-            if self.sender_should_halt_check() == False:
-                return []
+        # if self.stopping_condition_exists:
+        #     if self.sender_should_halt_check() == False:
+        #         return []
 
         symmetric_difference = self.listing(self.iblt_diff_cells)
         
         # Failure to decode.
         if symmetric_difference == ["Decode Failure"]:
             return []
-        # Empty symmetric difference
-        elif symmetric_difference == []:
-            return ["empty set"]
                 
         return symmetric_difference
     
-    def listing(self, cells) -> List[int]:
+
+    def calc_iblt_diff(self, iblt_sender: List[int], iblt_receiver: List[int]):
         """
-        Performs listing to the IBLT.
+        Calculates the IBLT of symmetric difference.
 
         Parameters:
-        - cells (List[cells]): List of cells to perform the listing on.
+        - iblt_sender (List[cells]): IBLT cells of the sender.
+        - iblt_receiver (List[cells]): IBLT cells of the receiver.
 
         Returns:
-        - List[int]: List of integers (type of source symbols) in the IBLT.
+        - List[int]: IBLT cells of the symmetric difference.
         """
-        raise NotImplementedError("Please Implement this method")
+        iblt_diff = []
+               
+        for cell_idx in range(len(iblt_receiver)):
+            iblt_diff.append(Cell())  
+
+            iblt_diff[cell_idx].sum =  iblt_receiver[cell_idx].sum ^ iblt_sender[cell_idx].sum
+
+            if iblt_receiver[cell_idx].checksum == 0:
+                iblt_diff[cell_idx].checksum = iblt_sender[cell_idx].checksum
+            
+            elif iblt_sender[cell_idx].checksum == 0:
+                iblt_diff[cell_idx].checksum = iblt_receiver[cell_idx].checksum
+            
+            else:
+                iblt_diff[cell_idx].checksum =  bytes(a ^ b for a, b in zip(iblt_receiver[cell_idx].checksum, iblt_sender[cell_idx].checksum))
+            
+            iblt_diff[cell_idx].counter -= iblt_receiver[cell_idx].counter - iblt_sender[cell_idx].counter
+        
+        return iblt_diff
     
-    def listing(self, cells) -> List[int]:
+    
+    def listing(self, cells: List[Cell], with_deocde_frac: bool = False) -> List[int]:
         """
         Performs listing to the IBLT.
 
         Parameters:
         - cells (List[cells]): List of cells to perform the listing on.
+        - with_deocde_frac (bool): Fraction of recovered symbols of 
+        IBLT.
 
         Returns:
         - List[int]: List of integers (type of source symbols) in the IBLT.
         """
         symbols = []
+        symbols_cnt = None
+
+        if with_deocde_frac:
+            symbols_cnt = sum([abs(c.counter) for c in cells])
+
+            if symbols_cnt == 0:
+                return ["Decode Failure", 0]
 
         while True:
             symbol = self.peeling_decoder(cells)
@@ -203,7 +215,10 @@ class IBLT:
 
                 # Decode Failure
                 if self.is_iblt_empty(cells) == False:
-                    return ["Decode Failure"]
+                    if with_deocde_frac == False:
+                        return ["Decode Failure"]
+                    else:
+                        return ["Decode Failure", len(symbols)/symbols_cnt]
                 else:
                     break
 
@@ -212,8 +227,12 @@ class IBLT:
             for row in range(len(self.mapping_matrix)):
                 mapping_value = self.mapping_matrix[row][symbol-1]
 
-                if mapping_value == 1:
+                if mapping_value == 1 and row < len(cells):
                     cells[row].remove(symbol)
+
+        # Empty symmetric difference
+        if symbols == []:
+            return ["empty set"]
 
         return sorted(symbols)     
         
@@ -248,7 +267,7 @@ class IBLT:
         - bool: IBLT is empty (True) or not (False).
         """
         for cell_idx in range(len(iblt_cells)):
-            if iblt_cells[cell_idx].counter != 0:
+            if iblt_cells[cell_idx].is_empty_cell() == False:
                 return False
             
         return True
