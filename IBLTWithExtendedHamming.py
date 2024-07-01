@@ -2,6 +2,7 @@ import math
 from typing import List, Set
 from IBLT import IBLT
 from itertools import combinations, product
+from scipy.sparse import csr_matrix, vstack
 
 class IBLTWithExtendedHamming(IBLT):
     def __init__(self, symbols: Set[int], n: int):
@@ -25,20 +26,27 @@ class IBLTWithExtendedHamming(IBLT):
         Parameters:
         - iteration (int): The iteration number for trasmit/receive.
         """
-        self.partial_mapping_matrix = []
+        partial_mapping_matrix = []
+
+        if iteration == 1:
+            # First row (all 1s)
+            partial_mapping_matrix.append([1] * self.n)
+
+            self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
+            self.mapping_matrix = self.partial_mapping_matrix
+            return
+
         row = []
 
-        block_size = 2 ** (iteration - 1)
+        block_size = 2 ** (iteration - 2)
 
         for _ in range(self.n // block_size):
             row.extend([0] * block_size + [1] * block_size)
         
         # Trim to n elements
         if row != []:
-            self.partial_mapping_matrix.append(row[:self.n]) 
-            self.mapping_matrix.append(row[:self.n]) 
+            partial_mapping_matrix.append(row[:self.n]) 
+            self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
+            self.mapping_matrix = csr_matrix(vstack([self.mapping_matrix, self.partial_mapping_matrix]))
         
-        if iteration == 1:
-            # Last row (all 1s)
-            self.partial_mapping_matrix.append([1] * self.n)
-            self.mapping_matrix.append([1] * self.n)
+        

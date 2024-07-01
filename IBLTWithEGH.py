@@ -1,8 +1,10 @@
+import numpy as np
 from typing import List, Set, Tuple
 from Cell import Cell
 from queue import Queue
 from functools import reduce
 from IBLT import IBLT
+from scipy.sparse import csr_matrix, vstack
 
 class IBLTWithEGH(IBLT):
     def __init__(self, symbols: Set[int], n: int):
@@ -71,13 +73,8 @@ class IBLTWithEGH(IBLT):
 
         self.primes.append(prime)
 
-        self.partial_mapping_matrix = [[0 for _ in range(self.n)] 
+        partial_mapping_matrix = [[0 for _ in range(self.n)] 
                                 for _ in range(prime)] 
-        
-        prev_rows_cnt = len(self.mapping_matrix)
-        
-        for i in range(prime):
-            self.mapping_matrix.append([0 for _ in range(self.n)])
 
         for symbol in range(1, self.n+1):
 
@@ -85,11 +82,16 @@ class IBLTWithEGH(IBLT):
         
             for i in range(prime):
                 if i == res:
-                    self.partial_mapping_matrix[i][symbol-1] = 1
-                    self.mapping_matrix[prev_rows_cnt+i][symbol-1] = 1
+                    partial_mapping_matrix[i][symbol-1] = 1
                 else:
-                    self.partial_mapping_matrix[i][symbol-1] = 0
-                    self.mapping_matrix[prev_rows_cnt+i][symbol-1] = 0
+                    partial_mapping_matrix[i][symbol-1] = 0
+        
+        self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
+
+        if iteration == 1:
+            self.mapping_matrix = self.partial_mapping_matrix
+        else:
+            self.mapping_matrix = csr_matrix(vstack([self.mapping_matrix, self.partial_mapping_matrix]))
 
     def sender_should_halt_check(self) -> bool:
         """

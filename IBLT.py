@@ -1,7 +1,11 @@
+import numpy as np
+# To utilize GPU 
+import cupy as cp
 from typing import List, Set, Tuple
 from Cell import Cell
 from queue import Queue
 from functools import reduce
+from scipy.sparse import csr_matrix
 
 class IBLT:
     def __init__(self, symbols: Set[int], n: int):
@@ -13,12 +17,15 @@ class IBLT:
         - n (int) - universe size.
         """
         # The sender/receiver set.
-        self.symbols = symbols 
+        self.symbols = np.array(list(symbols))
+        # self.symbols = cp.array(list(symbols))
+        # Symbols indices in 0 indexing.
+        self.symbols_indices = self.symbols - 1
         # Universe size
         self.n = n 
         # Partial mapping matrix of each symbol to IBLT cells.
         self.partial_mapping_matrix = []
-        # The whole mapping matrix of each symbol to IBLT cells.
+        # The whole mapping matrix of each symbol to IBLT cells (sparse - to save memory).
         self.mapping_matrix = []
         # The link to pass IBLT cells from sender to receiver (simulation
         # of a real communication link)
@@ -44,6 +51,7 @@ class IBLT:
         self.stopping_condition_exists = False
         # The size of the symmetric difference.
         self.symmetric_difference_size = 0
+        self.other_set_for_debug = set()
 
     def generate_mapping(self) -> None:
         """
@@ -70,20 +78,24 @@ class IBLT:
         self.trasmit_iterations += 1
 
         self.generate_mapping(self.trasmit_iterations)
+        
+        # Add IBLT cells for the sender.
+        rows = self.partial_mapping_matrix.shape[0]
 
-        cells = []
+        iblt_sender_cells = [Cell() for _ in range(rows)]
 
-        for i in range(len(self.partial_mapping_matrix)):
-            cells.append(Cell())
+        for row in range(rows):
+            # Get the indices where the row has a value of 1.
+            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # Get the symbols corresponding to these indices.
+            mapped_symbols = mask_symbols_indices + 1
 
-        for i in range(len(self.partial_mapping_matrix)):
-            for symbol in self.symbols:
-                mapping_value = self.partial_mapping_matrix[i][symbol-1]
+            # for symbol in mapped_symbols:
+            #     iblt_sender_cells[row].add(symbol)
 
-                if mapping_value == 1:
-                    cells[i].add(symbol)
+            iblt_sender_cells[row].add_multiple(mapped_symbols)
 
-        for c in cells:
+        for c in iblt_sender_cells:
             self.cells_queue.put(c)
 
         self.cells_queue.put("end")
@@ -118,31 +130,30 @@ class IBLT:
         if self.receive_iterations == 1:
             # Calculate number of elements received from sender.
             self.sender_set_size = sum([c.counter for c in iblt_sender_cells])
-
-        # The number of IBLT cells before the current iteration received.
-        prev_rows_cnt = len(self.iblt_receiver_cells)
         
         self.generate_mapping(self.receive_iterations)
 
-        # Create IBLT cells for the receiver.        
-        for i in range(len(self.partial_mapping_matrix)):
-            self.iblt_receiver_cells.append(Cell())   
+        # Add IBLT cells for the receiver.
+        rows = self.partial_mapping_matrix.shape[0]
 
-        for row in range(len(self.partial_mapping_matrix)):
-            for symbol in self.symbols:
-                mapping_value = self.partial_mapping_matrix[row][symbol-1]
+        iblt_receiver_cells = [Cell() for _ in range(rows)]
 
-                if mapping_value == 1:
-                    self.iblt_receiver_cells[prev_rows_cnt+row].add(symbol)
-        
+        for row in range(rows):
+            # Get the indices where the row has a value of 1.
+            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # Get the symbols corresponding to these indices.
+            mapped_symbols = mask_symbols_indices + 1
+
+            # for symbol in mapped_symbols:
+            #     iblt_receiver_cells[row].add(symbol)
+
+            iblt_receiver_cells[row].add_multiple(mapped_symbols)
+
+        self.iblt_receiver_cells.extend(iblt_receiver_cells)
+   
+
         self.iblt_diff_cells = self.calc_iblt_diff(self.iblt_sender_cells,
-                                                   self.iblt_receiver_cells)      
-
-        # Check if free zone is guaranteed for IBLT of symmetric difference.
-        # If not, more IBLT cells are needed.
-        # if self.stopping_condition_exists:
-        #     if self.sender_should_halt_check() == False:
-        #         return []
+                                                   self.iblt_receiver_cells)
 
         symmetric_difference = self.listing(self.iblt_diff_cells)
         
@@ -153,7 +164,7 @@ class IBLT:
         return symmetric_difference
     
 
-    def calc_iblt_diff(self, iblt_sender: List[int], iblt_receiver: List[int]):
+    def calc_iblt_diff(self, iblt_sender_cells: List[int], iblt_receiver_cells: List[int]):
         """
         Calculates the IBLT of symmetric difference.
 
@@ -166,21 +177,22 @@ class IBLT:
         """
         iblt_diff = []
                
-        for cell_idx in range(len(iblt_receiver)):
+        for cell_idx in range(len(iblt_receiver_cells)):
             iblt_diff.append(Cell())  
 
-            iblt_diff[cell_idx].sum =  iblt_receiver[cell_idx].sum ^ iblt_sender[cell_idx].sum
+            iblt_diff[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
 
-            if iblt_receiver[cell_idx].checksum == 0:
-                iblt_diff[cell_idx].checksum = iblt_sender[cell_idx].checksum
+            if iblt_receiver_cells[cell_idx].checksum == 0:
+                iblt_diff[cell_idx].checksum = iblt_sender_cells[cell_idx].checksum
             
-            elif iblt_sender[cell_idx].checksum == 0:
-                iblt_diff[cell_idx].checksum = iblt_receiver[cell_idx].checksum
+            elif iblt_sender_cells[cell_idx].checksum == 0:
+                iblt_diff[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum
             
-            else:
-                iblt_diff[cell_idx].checksum =  bytes(a ^ b for a, b in zip(iblt_receiver[cell_idx].checksum, iblt_sender[cell_idx].checksum))
-            
-            iblt_diff[cell_idx].counter -= iblt_receiver[cell_idx].counter - iblt_sender[cell_idx].counter
+            else:                
+                xor_result = np.frombuffer(iblt_receiver_cells[cell_idx].checksum, dtype=np.uint64) ^ np.frombuffer(iblt_sender_cells[cell_idx].checksum, dtype=np.uint64)
+                iblt_diff[cell_idx].checksum = xor_result.tobytes()
+
+            iblt_diff[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
         
         return iblt_diff
     
@@ -221,20 +233,21 @@ class IBLT:
                         return ["Decode Failure", len(symbols)/symbols_cnt]
                 else:
                     break
-
+            
             symbols.append(symbol)
 
-            for row in range(len(self.mapping_matrix)):
-                mapping_value = self.mapping_matrix[row][symbol-1]
-
-                if mapping_value == 1 and row < len(cells):
+            mapped_rows = np.where(self.mapping_matrix[:, symbol-1].toarray() == 1)[0]
+            
+            for row in mapped_rows:
+                if row < len(cells):
                     cells[row].remove(symbol)
+                    # cells[row].remove(np_symbol)
 
         # Empty symmetric difference
         if symbols == []:
             return ["empty set"]
 
-        return sorted(symbols)     
+        return symbols
         
     def peeling_decoder(self, cells: List[Cell]) -> int:
         """
@@ -266,11 +279,7 @@ class IBLT:
         Returns:
         - bool: IBLT is empty (True) or not (False).
         """
-        for cell_idx in range(len(iblt_cells)):
-            if iblt_cells[cell_idx].is_empty_cell() == False:
-                return False
-            
-        return True
+        return all(cell.is_empty_cell() for cell in iblt_cells)
 
     
   
