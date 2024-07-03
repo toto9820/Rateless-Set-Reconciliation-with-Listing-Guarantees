@@ -360,7 +360,7 @@ if __name__ == "__main__":
 
     # symmetric_difference_size is parameter d.
     # for symmetric_difference_size in [1, 2, 10, 20]:
-    for symmetric_difference_size in [4]:
+    for symmetric_difference_size in [5]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.EGH,
@@ -382,19 +382,12 @@ if __name__ == "__main__":
         #                              export_to_csv=False, 
         #                              csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                              set_inside_set = False)
-        
-        # benchmark_set_reconciliation(symmetric_difference_size, 
-        #                              Method.EGH,
-        #                              num_trials=trials, 
-        #                              export_to_csv=True, 
-        #                              csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-        #                              set_inside_set = False)
     
-    # plot_success_rate(Method.EGH, 
-    #                   universe_size=universe_size, symmetric_diff_sizes=[1,3,10,20], 
-    #                   num_trials=trials, export_to_csv=True, 
-    #                   csv_dir=f"egh_results",
-    #                   set_inside_set=True)
+    plot_success_rate(Method.EGH, 
+                      universe_size=universe_size, symmetric_diff_sizes=[1,3,10,20], 
+                      num_trials=trials, export_to_csv=True, 
+                      csv_dir=f"egh_results",
+                      set_inside_set=True)
         
 
     # print("IBLT + Binary Covering Arrays:")

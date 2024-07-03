@@ -6,6 +6,7 @@ from Cell import Cell
 from queue import Queue
 from functools import reduce
 from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix
 
 class IBLT:
     def __init__(self, symbols: Set[int], n: int):
@@ -18,7 +19,6 @@ class IBLT:
         """
         # The sender/receiver set.
         self.symbols = np.array(list(symbols))
-        # self.symbols = cp.array(list(symbols))
         # Symbols indices in 0 indexing.
         self.symbols_indices = self.symbols - 1
         # Universe size
@@ -41,9 +41,9 @@ class IBLT:
         # Number of iterations the receiver gets cells from the sender
         # (Receiver side)
         self.receive_iterations = 0
-        # All IBLT cells of sender that the receiver holds.
+        # IBLT cells of the sender (in receiver side).
         self.iblt_sender_cells = []
-        # All IBLT cells the receiver holds.
+        # IBLT cells of the receiver.
         self.iblt_receiver_cells = []
         # IBLT cells of the symmetric difference.
         self.iblt_diff_cells = []
@@ -51,6 +51,7 @@ class IBLT:
         self.stopping_condition_exists = False
         # The size of the symmetric difference.
         self.symmetric_difference_size = 0
+        # Sender set for debugging.
         self.other_set_for_debug = set()
 
     def generate_mapping(self) -> None:
@@ -241,7 +242,6 @@ class IBLT:
             for row in mapped_rows:
                 if row < len(cells):
                     cells[row].remove(symbol)
-                    # cells[row].remove(np_symbol)
 
         # Empty symmetric difference
         if symbols == []:
@@ -280,7 +280,6 @@ class IBLT:
         - bool: IBLT is empty (True) or not (False).
         """
         return all(cell.is_empty_cell() for cell in iblt_cells)
-
     
   
 
