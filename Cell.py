@@ -1,7 +1,7 @@
 import numpy as np
 from hashlib import sha256
 # A faster hashing algorithm
-from xxhash import xxh64, xxh32, xxh32_intdigest
+from xxhash import xxh64, xxh32
 
 class Cell:
     def __init__(self):
@@ -28,7 +28,7 @@ class Cell:
         if symbol not in self.hash_cache:
             # Cache the hash if not already cached
             # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+            # self.hash_cache[symbol] = xxh64(symbol).intdigest()
             self.hash_cache[symbol] = xxh32(bytes(symbol)).intdigest()
 
         # Perform XOR operation between the hash digests
@@ -49,9 +49,13 @@ class Cell:
             if symbol not in self.hash_cache:
                 # Cache the hash if not already cached
                 # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-                # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+                # self.hash_cache[symbol] = xxh64(symbol).intdigest()
                 self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
+        # For xxh64
+        # checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint64)
+
+        # For xxh32
         checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint32)
         
         self.checksum ^= np.bitwise_xor.reduce(checksum_values)
@@ -64,13 +68,13 @@ class Cell:
             # Cache the hash if not already cached.
             # digest - get the byte representations of the hash.
             # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+            # self.hash_cache[symbol] = xxh64(symbol).intdigest()
             self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
         self.sum ^= symbol
- 
-        self.checksum ^= self.hash_cache[symbol]
 
+        self.checksum ^= self.hash_cache[symbol]
+        
         if self.counter > 0:
             self.counter -= 1
         else:
@@ -82,7 +86,7 @@ class Cell:
         """
         if self.sum not in self.hash_cache:
             # self.hash_cache[self.sum] = sha256(bytes(self.sum)).digest()
-            # self.hash_cache[self.sum] = xxh64(bytes(self.sum)).intdigest()
+            # self.hash_cache[self.sum] = xxh64(self.sum).intdigest()
             self.hash_cache[self.sum] = xxh32(self.sum).intdigest()
 
         return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_cache[self.sum])

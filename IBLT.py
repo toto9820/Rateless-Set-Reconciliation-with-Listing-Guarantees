@@ -47,8 +47,6 @@ class IBLT:
         self.iblt_receiver_cells = []
         # IBLT cells of the symmetric difference.
         self.iblt_diff_cells = []
-        # Indicator if stopping condition for sender exists.
-        self.stopping_condition_exists = False
         # The size of the symmetric difference.
         self.symmetric_difference_size = 0
         # Sender set for debugging.

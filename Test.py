@@ -32,7 +32,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
     universe_size_trial_cnt = 1
 
     # for universe_size in [10**i for i in range(2, 6)]:
-    for universe_size in [10**i for i in range(5, 6)]:
+    for universe_size in [10**i for i in range(6, 7)]:
         universe_list = list(range(1, universe_size+1)) 
     
         total_cells_transmitted = 0
