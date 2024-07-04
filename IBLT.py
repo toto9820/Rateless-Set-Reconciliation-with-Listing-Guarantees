@@ -180,20 +180,11 @@ class IBLT:
                
         for cell_idx in range(len(iblt_receiver_cells)):
             iblt_diff.append(Cell())  
-
-            iblt_diff[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
-
-            if iblt_receiver_cells[cell_idx].checksum == 0:
-                iblt_diff[cell_idx].checksum = iblt_sender_cells[cell_idx].checksum
             
-            elif iblt_sender_cells[cell_idx].checksum == 0:
-                iblt_diff[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum
-            
-            else:                
-                xor_result = np.frombuffer(iblt_receiver_cells[cell_idx].checksum, dtype=np.uint64) ^ np.frombuffer(iblt_sender_cells[cell_idx].checksum, dtype=np.uint64)
-                iblt_diff[cell_idx].checksum = xor_result.tobytes()
-
             iblt_diff[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
+            iblt_diff[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
+            iblt_diff[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
+
         
         return iblt_diff
     

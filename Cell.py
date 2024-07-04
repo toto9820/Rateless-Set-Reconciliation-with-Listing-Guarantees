@@ -1,7 +1,7 @@
 import numpy as np
 from hashlib import sha256
 # A faster hashing algorithm
-from xxhash import xxh64
+from xxhash import xxh64, xxh32, xxh32_intdigest
 
 class Cell:
     def __init__(self):
@@ -22,22 +22,18 @@ class Cell:
         """
         Add source symbol to the cell.
         """
+        self.sum ^= symbol
+        self.counter += 1
+
         if symbol not in self.hash_cache:
             # Cache the hash if not already cached
             # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            self.hash_cache[symbol] = xxh64(bytes(symbol)).digest()
+            # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+            self.hash_cache[symbol] = xxh32(bytes(symbol)).intdigest()
 
-        if self.counter == 0:
-            self.sum = symbol
-            # digest - get the byte representations of the hash.
-            self.checksum = self.hash_cache[symbol]
-        else:
-            self.sum ^= symbol
-            # Perform XOR operation between the hash digests
-            xor_result = np.frombuffer(self.checksum, dtype=np.uint64) ^ np.frombuffer(self.hash_cache[symbol], dtype=np.uint64)
-            self.checksum = xor_result.tobytes()
+        # Perform XOR operation between the hash digests
+        self.checksum ^= self.hash_cache[symbol]
 
-        self.counter += 1
 
     def add_multiple(self, symbols: list[int]) -> None:
         """
@@ -49,14 +45,16 @@ class Cell:
         self.sum ^= np.bitwise_xor.reduce(symbols)
         self.counter += len(symbols)
 
-        for i, symbol in enumerate(symbols):
+        for symbol in symbols:
             if symbol not in self.hash_cache:
                 # Cache the hash if not already cached
                 # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-                self.hash_cache[symbol] = xxh64(bytes(symbol)).digest()
+                # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+                self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
-        checksum_arrays = [np.frombuffer(self.hash_cache[symbol], dtype=np.uint64) for symbol in symbols]
-        self.checksum = np.bitwise_xor.reduce(checksum_arrays).tobytes()
+        checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint32)
+        
+        self.checksum ^= np.bitwise_xor.reduce(checksum_values)
 
     def remove(self, symbol: int) -> None:
         """
@@ -66,13 +64,12 @@ class Cell:
             # Cache the hash if not already cached.
             # digest - get the byte representations of the hash.
             # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            self.hash_cache[symbol] = xxh64(bytes(symbol)).digest()
+            # self.hash_cache[symbol] = xxh64(bytes(symbol)).intdigest()
+            self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
         self.sum ^= symbol
-
-        # Perform XOR operation between the hash digests        
-        xor_result = np.frombuffer(self.checksum, dtype=np.uint64) ^ np.frombuffer(self.hash_cache[symbol], dtype=np.uint64)
-        self.checksum = xor_result.tobytes()
+ 
+        self.checksum ^= self.hash_cache[symbol]
 
         if self.counter > 0:
             self.counter -= 1
@@ -85,7 +82,8 @@ class Cell:
         """
         if self.sum not in self.hash_cache:
             # self.hash_cache[self.sum] = sha256(bytes(self.sum)).digest()
-            self.hash_cache[self.sum] = xxh64(bytes(self.sum)).digest()
+            # self.hash_cache[self.sum] = xxh64(bytes(self.sum)).intdigest()
+            self.hash_cache[self.sum] = xxh32(self.sum).intdigest()
 
         return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_cache[self.sum])
 

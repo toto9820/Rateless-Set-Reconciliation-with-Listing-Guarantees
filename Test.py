@@ -225,7 +225,7 @@ def measure_decode_success_rate(symmetric_difference_size: int,
 
         if set_inside_set:
             receiver_list = universe_list
-            sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
+            sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)        
         else:
             receiver_size = random.randint(1, universe_size - symmetric_difference_size)
             receiver_size = max(symmetric_difference_size, receiver_size)
