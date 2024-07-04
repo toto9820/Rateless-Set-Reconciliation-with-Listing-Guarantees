@@ -29,7 +29,7 @@ class Cell:
             # Cache the hash if not already cached
             # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
             # self.hash_cache[symbol] = xxh64(symbol).intdigest()
-            self.hash_cache[symbol] = xxh32(bytes(symbol)).intdigest()
+            self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
         # Perform XOR operation between the hash digests
         self.checksum ^= self.hash_cache[symbol]
@@ -42,9 +42,10 @@ class Cell:
         if len(symbols) == 0:
             return 
         
-        self.sum ^= np.bitwise_xor.reduce(symbols)
+        symbols_with_sum = np.append(self.sum, symbols)
+        self.sum = np.bitwise_xor.reduce(symbols_with_sum)
         self.counter += len(symbols)
-
+        
         for symbol in symbols:
             if symbol not in self.hash_cache:
                 # Cache the hash if not already cached
@@ -52,13 +53,15 @@ class Cell:
                 # self.hash_cache[symbol] = xxh64(symbol).intdigest()
                 self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
+                
         # For xxh64
         # checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint64)
 
         # For xxh32
         checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint32)
         
-        self.checksum ^= np.bitwise_xor.reduce(checksum_values)
+        checksum_values = np.append(checksum_values, self.checksum)
+        self.checksum = np.bitwise_xor.reduce(checksum_values)
 
     def remove(self, symbol: int) -> None:
         """
