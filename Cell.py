@@ -87,6 +87,9 @@ class Cell:
         """
         Check if the cell is pure - containing one element.
         """
+        if np.abs(self.counter) != 1 or self.sum == 0:
+            return False
+
         if self.sum not in self.hash_cache:
             # self.hash_cache[self.sum] = sha256(bytes(self.sum)).digest()
             # self.hash_cache[self.sum] = xxh64(self.sum).intdigest()

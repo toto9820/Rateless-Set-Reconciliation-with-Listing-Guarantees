@@ -15,6 +15,7 @@ from IBLTWithCovArr import IBLTWithCovArr
 from Method import Method
 from IBLTWithRecursiveArr import IBLTWithRecursiveArr
 from IBLTWithExtendedHamming import IBLTWithExtendedHamming
+from IBLTWithBCH import IBLTWithBCH
 
 def benchmark_set_reconciliation(symmetric_difference_size: int, 
                                  method: Method,
@@ -32,7 +33,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
     universe_size_trial_cnt = 1
 
     # for universe_size in [10**i for i in range(2, 6)]:
-    for universe_size in [10**i for i in range(6, 7)]:
+    for universe_size in [10**i for i in range(2, 6)]:
         universe_list = list(range(1, universe_size+1)) 
     
         total_cells_transmitted = 0
@@ -45,7 +46,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
                 receiver_size = random.randint(1, universe_size - symmetric_difference_size)
                 receiver_size = max(symmetric_difference_size, receiver_size)
                 receiver_list = random.sample(universe_list, receiver_size)
-
+                
                 # print("receiver_list: ", receiver_list)
 
                 universe_without_receiver_set = set(universe_list) - set(receiver_list)
@@ -72,10 +73,13 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
                 receiver = IBLTWithRecursiveArr(set(receiver_list), universe_size)
 
             elif method == Method.EXTENDED_HAMMING_CODE:
-                # sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
-                # receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
                 sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
                 receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
+                receiver.other_set_for_debug = set(sender_list)
+
+            elif method == Method.BCH:
+                sender = IBLTWithBCH(set(sender_list), universe_size)
+                receiver = IBLTWithBCH(set(receiver_list), universe_size)
                 receiver.other_set_for_debug = set(sender_list)
 
             symmetric_difference = []
@@ -137,6 +141,9 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
 #     elif method == Method.EXTENDED_HAMMING_CODE:
 #         sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
 #         receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
+#     elif method == Method.BCH:
+#         sender = IBLTWithBCH(set(sender_list), universe_size)
+#         receiver = IBLTWithBCH(set(receiver_list), universe_size)
 
 #     receiver.other_set_for_debug = set(sender_list)
 
@@ -172,7 +179,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
 #     universe_size_trial_cnt = 1
 
 #     # for universe_size in [10**i for i in range(1, 7)]:
-#     for universe_size in [10**i for i in range(6, 7)]:
+#     for universe_size in [10**i for i in range(2, 6)]:
 #         total_cells_transmitted = 0
 #         trials_to_futures = {}
 
@@ -258,6 +265,10 @@ def measure_decode_success_rate(symmetric_difference_size: int,
         elif method == Method.EXTENDED_HAMMING_CODE:
             sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
             receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
+
+        elif method == Method.BCH:
+            sender = IBLTWithBCH(set(sender_list), universe_size)
+            receiver = IBLTWithBCH(set(receiver_list), universe_size)
 
         sender_cells = []
         reciver_cells = []
@@ -356,11 +367,11 @@ if __name__ == "__main__":
     universe_size = 100
     trials = 25 
 
-    print("IBLT + EGH:")
+    # print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
     # for symmetric_difference_size in [1, 2, 10, 20]:
-    for symmetric_difference_size in [5]:
+    # for symmetric_difference_size in [5]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.EGH,
@@ -369,12 +380,12 @@ if __name__ == "__main__":
         #                              csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                              set_inside_set = True)
 
-        profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
-                                     Method.EGH,
-                                     num_trials=trials, 
-                                     export_to_csv=True, 
-                                     csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-                                     set_inside_set = False)
+        # profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
+        #                              Method.EGH,
+        #                              num_trials=trials, 
+        #                              export_to_csv=True, 
+        #                              csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                              set_inside_set = False)
         
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.EGH,
@@ -383,11 +394,11 @@ if __name__ == "__main__":
         #                              csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                              set_inside_set = False)
     
-    plot_success_rate(Method.EGH, 
-                      universe_size=universe_size, symmetric_diff_sizes=[1,3,10,20], 
-                      num_trials=trials, export_to_csv=True, 
-                      csv_dir=f"egh_results",
-                      set_inside_set=True)
+    # plot_success_rate(Method.EGH, 
+    #                   universe_size=universe_size, symmetric_diff_sizes=[1,3,10,20], 
+    #                   num_trials=trials, export_to_csv=True, 
+    #                   csv_dir=f"egh_results",
+    #                   set_inside_set=True)
         
 
     # print("IBLT + Binary Covering Arrays:")
@@ -448,3 +459,42 @@ if __name__ == "__main__":
     #                 csv_dir=f"extended_hamming_results",
     #                 set_inside_set=True)
 
+    print("IBLT + BCH:")
+
+    # symmetric_difference_size is parameter d.
+    # for symmetric_difference_size in [1, 2, 10, 20]:
+    for symmetric_difference_size in [5]:
+
+        # benchmark_set_reconciliation(symmetric_difference_size, 
+        #                              Method.BCH,
+        #                              num_trials=trials, 
+        #                              export_to_csv=True, 
+        #                              csv_filename=f"bch_results/bch_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                              set_inside_set = True)
+
+        # benchmark_set_reconciliation(symmetric_difference_size, 
+        #                         Method.BCH,
+        #                         num_trials=trials, 
+        #                         export_to_csv=True, 
+        #                         csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                         set_inside_set = True)
+
+        profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
+                                     Method.BCH,
+                                     num_trials=trials, 
+                                     export_to_csv=True, 
+                                     csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                                     set_inside_set = False)
+        
+        # benchmark_set_reconciliation(symmetric_difference_size, 
+        #                              Method.BCH,
+        #                              num_trials=trials, 
+        #                              export_to_csv=False, 
+        #                              csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                              set_inside_set = False)
+    
+    # plot_success_rate(Method.BCH, 
+    #                   universe_size=universe_size, symmetric_diff_sizes=[1,5,10,20], 
+    #                   num_trials=trials, export_to_csv=True, 
+    #                   csv_dir=f"bch_results",
+    #                   set_inside_set=True)
