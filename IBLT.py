@@ -1,6 +1,5 @@
 import numpy as np
 # To utilize GPU 
-import cupy as cp
 from typing import List, Set, Tuple
 from Cell import Cell
 from queue import Queue
@@ -163,7 +162,7 @@ class IBLT:
         if len(symmetric_difference) == 2:
             print("debug stop")
                 
-        return symmetric_difference
+        return [int(symbol) for symbol in symmetric_difference]
     
 
     def calc_iblt_diff(self, iblt_sender_cells: List[int], iblt_receiver_cells: List[int]):

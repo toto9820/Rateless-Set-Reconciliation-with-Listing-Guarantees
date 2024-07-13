@@ -1,12 +1,18 @@
 import numpy as np
+import operator
 from hashlib import sha256
 # A faster hashing algorithm
-from xxhash import xxh64, xxh32
+from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest 
+from functools import reduce
+import multiprocessing
 
 class Cell:
-    def __init__(self):
+    def __init__(self, hash_func='xxh64'):
         """
         Represents a cell of an IBLTWithEGH
+
+        Parameters:
+        - hash_func (str): Specifying the hash function to use ('xxh32', 'xxh64', or 'sha256').
         """
         # Represents the sum (xor of source symbols)
         self.sum = 0
@@ -15,8 +21,21 @@ class Cell:
         # Represents the counter array - how many soruce symbols
         # are mapped to the cell.
         self.counter = 0
-        # Cache for storing precomputed hashes
-        self.hash_cache = {}
+
+        # TODO - hash of transactions is in string and not int (they are the symbols) form - 
+        # should enable to define options to symbols type - int, str, etc.
+        if hash_func == 'xxh32':
+            self.hash_func = lambda x: xxh32_intdigest(x)
+        elif hash_func == 'xxh64':
+            self.hash_func = lambda x: xxh64_intdigest(x)
+        elif hash_func == 'xxh3_64':
+            self.hash_func = lambda x: xxh3_64_intdigest(x)
+        # TODO - not supported - lack of intdigest so xor with ^= not useful - fix!
+        # elif hash_func == 'sha256':
+        #     self.hash_func = lambda x: sha256(bytes(x)).hexdigest()
+        #     self.checksum = self.hash_func(self.sum)
+        else:
+            raise ValueError("Invalid hash function specified. Choose 'xxh32', 'xxh64', 'xxh3_64 or 'sha256'.")
 
     def add(self, symbol: int) -> None:
         """
@@ -25,15 +44,8 @@ class Cell:
         self.sum ^= symbol
         self.counter += 1
 
-        if symbol not in self.hash_cache:
-            # Cache the hash if not already cached
-            # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            # self.hash_cache[symbol] = xxh64(symbol).intdigest()
-            self.hash_cache[symbol] = xxh32(symbol).intdigest()
-
         # Perform XOR operation between the hash digests
-        self.checksum ^= self.hash_cache[symbol]
-
+        self.checksum ^= self.hash_func(symbol)
 
     def add_multiple(self, symbols: list[int]) -> None:
         """
@@ -42,41 +54,28 @@ class Cell:
         if len(symbols) == 0:
             return 
         
-        symbols_with_sum = np.append(self.sum, symbols)
-        self.sum = np.bitwise_xor.reduce(symbols_with_sum)
         self.counter += len(symbols)
-        
-        for symbol in symbols:
-            if symbol not in self.hash_cache:
-                # Cache the hash if not already cached
-                # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-                # self.hash_cache[symbol] = xxh64(symbol).intdigest()
-                self.hash_cache[symbol] = xxh32(symbol).intdigest()
 
-                
-        # For xxh64
-        # checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint64)
+        hashes = [self.hash_func(symbol) for symbol in symbols]
 
-        # For xxh32
-        checksum_values = np.array([self.hash_cache[symbol] for symbol in symbols], dtype=np.uint32)
-        
-        checksum_values = np.append(checksum_values, self.checksum)
-        self.checksum = np.bitwise_xor.reduce(checksum_values)
+        # hashes = []
+
+        # cpu_cores_count = multiprocessing.cpu_count()
+        # chunk_size = len(symbols) // cpu_cores_count + 1
+
+        # with multiprocessing.Pool(processes=cpu_cores_count) as pool:
+        #     hashes = pool.map(xxh64_intdigest, symbols, chunk_size)
+
+        self.sum ^= reduce(operator.xor, symbols)
+        self.checksum ^= reduce(operator.xor, hashes)
 
     def remove(self, symbol: int) -> None:
         """
         Remove source symbol from the cell.
         """
-        if symbol not in self.hash_cache:
-            # Cache the hash if not already cached.
-            # digest - get the byte representations of the hash.
-            # self.hash_cache[symbol] = sha256(bytes(symbol)).digest()
-            # self.hash_cache[symbol] = xxh64(symbol).intdigest()
-            self.hash_cache[symbol] = xxh32(symbol).intdigest()
-
         self.sum ^= symbol
 
-        self.checksum ^= self.hash_cache[symbol]
+        self.checksum ^= self.hash_func(symbol)
         
         if self.counter > 0:
             self.counter -= 1
@@ -90,12 +89,7 @@ class Cell:
         if np.abs(self.counter) != 1 or self.sum == 0:
             return False
 
-        if self.sum not in self.hash_cache:
-            # self.hash_cache[self.sum] = sha256(bytes(self.sum)).digest()
-            # self.hash_cache[self.sum] = xxh64(self.sum).intdigest()
-            self.hash_cache[self.sum] = xxh32(self.sum).intdigest()
-
-        return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_cache[self.sum])
+        return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_func(self.sum))
 
 
     def is_empty_cell(self) -> bool:

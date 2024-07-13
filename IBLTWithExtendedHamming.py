@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from typing import List, Set
 from IBLT import IBLT
 from itertools import combinations, product
@@ -15,7 +16,6 @@ class IBLTWithExtendedHamming(IBLT):
         - n (int) - universe size.
         """
         super().__init__(symbols, n)
-        self.stopping_condition_exists = False
 
     def generate_mapping(self, iteration: int) -> None:
         """
@@ -36,16 +36,21 @@ class IBLTWithExtendedHamming(IBLT):
             self.mapping_matrix = self.partial_mapping_matrix
             return
 
-        row = []
+        period = 2 ** (iteration - 2)
 
-        block_size = 2 ** (iteration - 2)
+        # Create the two alternating blocks
+        block1 = [0] * period + [1] * period
+        block2 = [1] * period + [0] * period
 
-        for _ in range(self.n // block_size):
-            row.extend([0] * block_size + [1] * block_size)
+        num_blocks = self.n // len(block1) + 1
         
+        partial_mapping_matrix = [
+        (block1 * num_blocks)[:self.n],
+        (block2 * num_blocks)[:self.n]
+        ]
+
         # Trim to n elements
-        if row != []:
-            partial_mapping_matrix.append(row[:self.n]) 
+        if partial_mapping_matrix != []:
             self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
             self.mapping_matrix = csr_matrix(vstack([self.mapping_matrix, self.partial_mapping_matrix]))
         

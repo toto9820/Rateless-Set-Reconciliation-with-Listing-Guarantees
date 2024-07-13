@@ -4,11 +4,11 @@ import random
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import cupy as cp
 import concurrent.futures
 import cProfile
 import pstats
 import io
+from numba import jit
 from typing import List, Set, Tuple
 from IBLTWithEGH import IBLTWithEGH
 from IBLTWithCovArr import IBLTWithCovArr
@@ -32,8 +32,8 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
     results = []
     universe_size_trial_cnt = 1
 
+    for universe_size in [10**i for i in range(5, 6)]:
     # for universe_size in [10**i for i in range(2, 6)]:
-    for universe_size in [10**i for i in range(2, 6)]:
         universe_list = list(range(1, universe_size+1)) 
     
         total_cells_transmitted = 0
@@ -225,7 +225,7 @@ def measure_decode_success_rate(symmetric_difference_size: int,
     
     universe_list = list(range(1, universe_size + 1))  
 
-    success_probabilities = [0] * 4 * max_symmetric_diff_size
+    success_probabilities = [0] * 20 * max_symmetric_diff_size
 
     for _ in range(num_trials):
         end_trial = False
@@ -349,7 +349,7 @@ def plot_success_rate(method, universe_size, symmetric_diff_sizes, num_trials=10
     plt.ylabel('Success Probability')
     plt.title(f'Success Probability vs. Number of cells for {method}')
     plt.legend()
-    # plt.show(block=True)
+    plt.show(block=True)
 
 def profile_function(func, *args, **kwargs):
     pr = cProfile.Profile()
@@ -366,12 +366,13 @@ def profile_function(func, *args, **kwargs):
 if __name__ == "__main__":
     universe_size = 100
     trials = 25 
+    # trials = 100 
 
     # print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
     # for symmetric_difference_size in [1, 2, 10, 20]:
-    # for symmetric_difference_size in [5]:
+    for symmetric_difference_size in [20]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.EGH,
@@ -380,12 +381,12 @@ if __name__ == "__main__":
         #                              csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                              set_inside_set = True)
 
-        # profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
-        #                              Method.EGH,
-        #                              num_trials=trials, 
-        #                              export_to_csv=True, 
-        #                              csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-        #                              set_inside_set = False)
+        profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
+                                     Method.EGH,
+                                     num_trials=trials, 
+                                     export_to_csv=False, 
+                                     csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                                     set_inside_set = False)
         
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.EGH,
@@ -438,7 +439,7 @@ if __name__ == "__main__":
 
     # print("IBLT + Extended Hamming Code:")
 
-    # for symmetric_difference_size in [1,2]:
+    # for symmetric_difference_size in [1,2,3]:
     #     benchmark_set_reconciliation(symmetric_difference_size,
     #                                  Method.EXTENDED_HAMMING_CODE, 
     #                                  num_trials=trials, 
@@ -459,11 +460,13 @@ if __name__ == "__main__":
     #                 csv_dir=f"extended_hamming_results",
     #                 set_inside_set=True)
 
-    print("IBLT + BCH:")
+    # For now - I can't use with multithreading due to issue with SQL - the 
+    # creator thread and using thread are different.
+    # print("IBLT + BCH:")
 
     # symmetric_difference_size is parameter d.
-    # for symmetric_difference_size in [1, 2, 10, 20]:
-    for symmetric_difference_size in [5]:
+    # for symmetric_difference_size in [1, 5, 10, 20]:
+    # for symmetric_difference_size in [5]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.BCH,
@@ -479,12 +482,12 @@ if __name__ == "__main__":
         #                         csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                         set_inside_set = True)
 
-        profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
-                                     Method.BCH,
-                                     num_trials=trials, 
-                                     export_to_csv=True, 
-                                     csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-                                     set_inside_set = False)
+        # profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
+        #                              Method.BCH,
+        #                              num_trials=trials, 
+        #                              export_to_csv=True, 
+        #                              csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                              set_inside_set = False)
         
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.BCH,
@@ -494,7 +497,7 @@ if __name__ == "__main__":
         #                              set_inside_set = False)
     
     # plot_success_rate(Method.BCH, 
-    #                   universe_size=universe_size, symmetric_diff_sizes=[1,5,10,20], 
+    #                   universe_size=universe_size, symmetric_diff_sizes=[1,5,7,10,15,20], 
     #                   num_trials=trials, export_to_csv=True, 
     #                   csv_dir=f"bch_results",
     #                   set_inside_set=True)

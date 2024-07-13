@@ -43,7 +43,7 @@ class IBLTWithBCH(IBLT):
         """
 
         if iteration >= 2**(self.m - 1):
-            raise ValueError("No more gurantee for decodablitiy for d = {iteration}")
+            raise ValueError(f"No more gurantee for decodablitiy for d = {iteration}")
         
         partial_mapping_matrix = np.zeros((self.m, self.n), dtype=int)
                 
