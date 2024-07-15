@@ -8,163 +8,16 @@ import concurrent.futures
 import cProfile
 import pstats
 import io
+import multiprocessing
 from numba import jit
 from typing import List, Set, Tuple
+from functools import partial
 from IBLTWithEGH import IBLTWithEGH
 from IBLTWithCovArr import IBLTWithCovArr
 from Method import Method
 from IBLTWithRecursiveArr import IBLTWithRecursiveArr
 from IBLTWithExtendedHamming import IBLTWithExtendedHamming
 from IBLTWithBCH import IBLTWithBCH
-
-def benchmark_set_reconciliation(symmetric_difference_size: int, 
-                                 method: Method,
-                                 num_trials: int, 
-                                 export_to_csv: bool = False, 
-                                 csv_filename: str = "results.csv",
-                                 set_inside_set: bool = True):
-    
-    if set_inside_set:
-        print(f"Receiver set is a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
-    else:
-        print(f"Receiver set is not a super set of sender set symmetric_difference_size {symmetric_difference_size}")
-    
-    results = []
-    universe_size_trial_cnt = 1
-
-    for universe_size in [10**i for i in range(5, 6)]:
-    # for universe_size in [10**i for i in range(2, 6)]:
-        universe_list = list(range(1, universe_size+1)) 
-    
-        total_cells_transmitted = 0
-
-        for trial in range(1, num_trials+1):
-            if set_inside_set:
-                receiver_list = universe_list
-                sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
-            else:
-                receiver_size = random.randint(1, universe_size - symmetric_difference_size)
-                receiver_size = max(symmetric_difference_size, receiver_size)
-                receiver_list = random.sample(universe_list, receiver_size)
-                
-                # print("receiver_list: ", receiver_list)
-
-                universe_without_receiver_set = set(universe_list) - set(receiver_list)
-                
-                sender_list = []
-
-                sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
-
-                sender_list.extend(receiver_list[:(receiver_size-1)])
-                
-                # print("sender_list: ", sender_list)
-
-            if method == Method.EGH:
-                sender = IBLTWithEGH(set(sender_list), universe_size)
-                receiver = IBLTWithEGH(set(receiver_list), universe_size)
-                receiver.other_set_for_debug = set(sender_list)
-
-            elif method == Method.BINARY_COVERING_ARRAY:
-                sender = IBLTWithCovArr(set(sender_list), universe_size)
-                receiver = IBLTWithCovArr(set(receiver_list), universe_size)
-
-            elif method == Method.RECURSIVE_ARRAY:
-                sender = IBLTWithRecursiveArr(set(sender_list), universe_size)
-                receiver = IBLTWithRecursiveArr(set(receiver_list), universe_size)
-
-            elif method == Method.EXTENDED_HAMMING_CODE:
-                sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
-                receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
-                receiver.other_set_for_debug = set(sender_list)
-
-            elif method == Method.BCH:
-                sender = IBLTWithBCH(set(sender_list), universe_size)
-                receiver = IBLTWithBCH(set(receiver_list), universe_size)
-                receiver.other_set_for_debug = set(sender_list)
-
-            symmetric_difference = []
-
-            while True:
-                sender_cells = []
-
-                sender.transmit()
-
-                while not sender.cells_queue.empty():
-                    cell = sender.cells_queue.get()
-
-                    # End of IBLT's cells transmitting.
-                    if cell == "end":
-                        break
-
-                    sender_cells.append(cell)
-
-                symmetric_difference = receiver.receive(sender_cells)
-
-                if symmetric_difference:
-                    sender.ack_queue.put("stop")
-                    break
-
-            total_cells_transmitted += len(receiver.iblt_diff_cells)
-            print(f"Symmetric difference in trail {trial}: {symmetric_difference}")
-
-        avg_total_cells_transmitted =  math.ceil(total_cells_transmitted / num_trials)
-        print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
-        results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
-        universe_size_trial_cnt += 1
-
-    if export_to_csv:
-        export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
-                              results, csv_filename)
-
-# def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: int, method: Method, set_inside_set: bool) -> int:
-#     universe_list = list(range(1, universe_size + 1))
-
-#     if set_inside_set:
-#         receiver_list = universe_list
-#         sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
-#     else:
-#         receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
-#         receiver_list = random.sample(universe_list, receiver_size)
-#         universe_without_receiver_set = set(universe_list) - set(receiver_list)
-#         sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
-#         sender_list.extend(receiver_list[:(receiver_size-1)])
-
-#     if method == Method.EGH:
-#         sender = IBLTWithEGH(set(sender_list), universe_size)
-#         receiver = IBLTWithEGH(set(receiver_list), universe_size)
-#     elif method == Method.BINARY_COVERING_ARRAY:
-#         sender = IBLTWithCovArr(set(sender_list), universe_size)
-#         receiver = IBLTWithCovArr(set(receiver_list), universe_size)
-#     elif method == Method.RECURSIVE_ARRAY:
-#         sender = IBLTWithRecursiveArr(set(sender_list), universe_size)
-#         receiver = IBLTWithRecursiveArr(set(receiver_list), universe_size)
-#     elif method == Method.EXTENDED_HAMMING_CODE:
-#         sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
-#         receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
-#     elif method == Method.BCH:
-#         sender = IBLTWithBCH(set(sender_list), universe_size)
-#         receiver = IBLTWithBCH(set(receiver_list), universe_size)
-
-#     receiver.other_set_for_debug = set(sender_list)
-
-#     while True:
-#         sender_cells = []
-#         sender.transmit()
-
-#         while not sender.cells_queue.empty():
-#             cell = sender.cells_queue.get()
-#             if cell == "end":
-#                 break
-#             sender_cells.append(cell)
-
-#         symmetric_difference = receiver.receive(sender_cells)
-
-#         if symmetric_difference:
-#             print(f"Trial {trial_number}: Universe size {universe_size}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
-#             sender.ack_queue.put("stop")
-#             break
-
-#     return len(receiver.iblt_diff_cells)
 
 # def benchmark_set_reconciliation(symmetric_difference_size: int, 
 #                                  method: Method,
@@ -173,36 +26,91 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
 #                                  csv_filename: str = "results.csv",
 #                                  set_inside_set: bool = True):
     
-#     print(f"{'Receiver set is' if set_inside_set else 'Receiver set is not'} a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+#     if set_inside_set:
+#         print(f"Receiver set is a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+#     else:
+#         print(f"Receiver set is not a super set of sender set symmetric_difference_size {symmetric_difference_size}")
     
 #     results = []
 #     universe_size_trial_cnt = 1
 
-#     # for universe_size in [10**i for i in range(1, 7)]:
-#     for universe_size in [10**i for i in range(2, 6)]:
+#     for universe_size in [10**i for i in range(5, 6)]:
+#     # for universe_size in [10**i for i in range(2, 6)]:
+#         universe_list = list(range(1, universe_size+1)) 
+    
 #         total_cells_transmitted = 0
-#         trials_to_futures = {}
 
-#         # Use ThreadPoolExecutor to run trials in parallel
-#         with concurrent.futures.ThreadPoolExecutor(max_workers=num_trials) as executor:
-#             # Submit all trials to the executor and map each future to its trial number
-#             for i in range(num_trials):
-#                 future = executor.submit(run_trial, i+1, universe_size, symmetric_difference_size, method, set_inside_set)
-#                 trials_to_futures[i + 1] = future
-            
-#             # Process results as they complete
-#             for trial, future in trials_to_futures.items():
-#                 try:
-#                     cells_transmitted = future.result()
-#                     total_cells_transmitted += cells_transmitted
-#                     print(f"Trial {trial}, Universe size {universe_size} completed: {cells_transmitted} cells transmitted")
-#                 except Exception as exc:
-#                     print(f"Trial {trial} generated an exception: {exc}")
+#         for trial in range(1, num_trials+1):
+#             if set_inside_set:
+#                 receiver_list = universe_list
+#                 sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
+#             else:
+#                 receiver_size = random.randint(1, universe_size - symmetric_difference_size)
+#                 receiver_size = max(symmetric_difference_size, receiver_size)
+#                 receiver_list = random.sample(universe_list, receiver_size)
+                
+#                 # print("receiver_list: ", receiver_list)
 
-#         avg_total_cells_transmitted = math.ceil(total_cells_transmitted / num_trials)
-#         print("###############################################################################")
+#                 universe_without_receiver_set = set(universe_list) - set(receiver_list)
+                
+#                 sender_list = []
+
+#                 sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
+
+#                 sender_list.extend(receiver_list[:(receiver_size-1)])
+                
+#                 # print("sender_list: ", sender_list)
+
+#             if method == Method.EGH:
+#                 sender = IBLTWithEGH(set(sender_list), universe_size)
+#                 receiver = IBLTWithEGH(set(receiver_list), universe_size)
+#                 receiver.other_set_for_debug = set(sender_list)
+
+#             elif method == Method.BINARY_COVERING_ARRAY:
+#                 sender = IBLTWithCovArr(set(sender_list), universe_size)
+#                 receiver = IBLTWithCovArr(set(receiver_list), universe_size)
+
+#             elif method == Method.RECURSIVE_ARRAY:
+#                 sender = IBLTWithRecursiveArr(set(sender_list), universe_size)
+#                 receiver = IBLTWithRecursiveArr(set(receiver_list), universe_size)
+
+#             elif method == Method.EXTENDED_HAMMING_CODE:
+#                 sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
+#                 receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
+#                 receiver.other_set_for_debug = set(sender_list)
+
+#             elif method == Method.BCH:
+#                 sender = IBLTWithBCH(set(sender_list), universe_size)
+#                 receiver = IBLTWithBCH(set(receiver_list), universe_size)
+#                 receiver.other_set_for_debug = set(sender_list)
+
+#             symmetric_difference = []
+
+#             while True:
+#                 sender_cells = []
+
+#                 sender.transmit()
+
+#                 while not sender.cells_queue.empty():
+#                     cell = sender.cells_queue.get()
+
+#                     # End of IBLT's cells transmitting.
+#                     if cell == "end":
+#                         break
+
+#                     sender_cells.append(cell)
+
+#                 symmetric_difference = receiver.receive(sender_cells)
+
+#                 if symmetric_difference:
+#                     sender.ack_queue.put("stop")
+#                     break
+
+#             total_cells_transmitted += len(receiver.iblt_diff_cells)
+#             print(f"Symmetric difference in trail {trial}: {symmetric_difference}")
+
+#         avg_total_cells_transmitted =  math.ceil(total_cells_transmitted / num_trials)
 #         print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
-#         print("###############################################################################")
 #         results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
 #         universe_size_trial_cnt += 1
 
@@ -210,8 +118,100 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
 #         export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
 #                               results, csv_filename)
 
+def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: int, method: Method, set_inside_set: bool) -> int:
+    universe_list = list(range(1, universe_size + 1))
+
+    if set_inside_set:
+        receiver_list = universe_list
+        sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
+    else:
+        receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
+        receiver_list = random.sample(universe_list, receiver_size)
+        universe_without_receiver_set = set(universe_list) - set(receiver_list)
+        sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
+        sender_list.extend(receiver_list[:(receiver_size-1)])
+
+    if method == Method.EGH:
+        sender = IBLTWithEGH(set(sender_list), universe_size)
+        receiver = IBLTWithEGH(set(receiver_list), universe_size)
+    elif method == Method.BINARY_COVERING_ARRAY:
+        sender = IBLTWithCovArr(set(sender_list), universe_size)
+        receiver = IBLTWithCovArr(set(receiver_list), universe_size)
+    elif method == Method.RECURSIVE_ARRAY:
+        sender = IBLTWithRecursiveArr(set(sender_list), universe_size)
+        receiver = IBLTWithRecursiveArr(set(receiver_list), universe_size)
+    elif method == Method.EXTENDED_HAMMING_CODE:
+        sender = IBLTWithExtendedHamming(set(sender_list), universe_size)
+        receiver = IBLTWithExtendedHamming(set(receiver_list), universe_size)
+    elif method == Method.BCH:
+        sender = IBLTWithBCH(set(sender_list), universe_size)
+        receiver = IBLTWithBCH(set(receiver_list), universe_size)
+
+    receiver.other_set_for_debug = set(sender_list)
+
+    while True:
+        sender_cells = []
+        sender.transmit()
+
+        while not sender.cells_queue.empty():
+            cell = sender.cells_queue.get()
+            if cell == "end":
+                break
+            sender_cells.append(cell)
+
+        symmetric_difference = receiver.receive(sender_cells)
+
+        if symmetric_difference:
+            print(f"Trial {trial_number}: Universe size {universe_size}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
+            sender.ack_queue.put("stop")
+            break
+
+    return len(receiver.iblt_diff_cells)
+
+def benchmark_set_reconciliation(symmetric_difference_size: int, 
+                                 method: Method,
+                                 num_trials: int, 
+                                 export_to_csv: bool = False, 
+                                 csv_filename: str = "results.csv",
+                                 set_inside_set: bool = True):
+    
+    print(f"{'Receiver set is' if set_inside_set else 'Receiver set is not'} a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+    
+    results = []
+    universe_size_trial_cnt = 1
+
+    # for universe_size in [10**i for i in range(1, 7)]:
+    for universe_size in [10**i for i in range(6, 7)]:
+        total_cells_transmitted = 0
+        # trials_to_futures = {}
+
+        # Create a partial function with fixed arguments
+        partial_run_trial = partial(run_trial, 
+                                    universe_size=universe_size, 
+                                    symmetric_difference_size=symmetric_difference_size, 
+                                    method=method, 
+                                    set_inside_set=set_inside_set)
+        
+        # Use Pool to run trials in parallel
+        with multiprocessing.Pool() as pool:
+            # Use imap_unordered for better performance with large number of items
+            for i, cells_transmitted in enumerate(pool.imap_unordered(partial_run_trial, range(1, num_trials + 1))):
+                total_cells_transmitted += cells_transmitted
+                print(f"Trial {i}, Universe size {universe_size} completed: {cells_transmitted} cells transmitted")
+
+        avg_total_cells_transmitted = math.ceil(total_cells_transmitted / num_trials)
+        print("###############################################################################")
+        print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
+        print("###############################################################################")
+        results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
+        universe_size_trial_cnt += 1
+
+    if export_to_csv:
+        export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
+                              results, csv_filename)
+
 def export_results_to_csv(header, results, csv_filename: str) -> None:
-    with open(os.path.join("./data", csv_filename), mode='w', newline='') as file:
+    with open(os.path.join("./data", csv_filename), mode='w+', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(header)
         writer.writerows(results)
@@ -371,7 +371,7 @@ if __name__ == "__main__":
     # print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
-    # for symmetric_difference_size in [1, 2, 10, 20]:
+    # for symmetric_difference_size in [1, 3, 10, 20]:
     for symmetric_difference_size in [20]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
@@ -458,15 +458,15 @@ if __name__ == "__main__":
     #                 universe_size=universe_size, symmetric_diff_sizes=[1,2,3,4,6,8], 
     #                 num_trials=trials, export_to_csv=True,
     #                 csv_dir=f"extended_hamming_results",
-    #                 set_inside_set=True)
+    #                 set_inside_set=False)
 
     # For now - I can't use with multithreading due to issue with SQL - the 
     # creator thread and using thread are different.
     # print("IBLT + BCH:")
 
     # symmetric_difference_size is parameter d.
-    # for symmetric_difference_size in [1, 5, 10, 20]:
-    # for symmetric_difference_size in [5]:
+    # for symmetric_difference_size in [1, 3, 10, 20]:
+    # for symmetric_difference_size in [3]:
 
         # benchmark_set_reconciliation(symmetric_difference_size, 
         #                              Method.BCH,
@@ -474,13 +474,6 @@ if __name__ == "__main__":
         #                              export_to_csv=True, 
         #                              csv_filename=f"bch_results/bch_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                              set_inside_set = True)
-
-        # benchmark_set_reconciliation(symmetric_difference_size, 
-        #                         Method.BCH,
-        #                         num_trials=trials, 
-        #                         export_to_csv=True, 
-        #                         csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-        #                         set_inside_set = True)
 
         # profile_function(benchmark_set_reconciliation,symmetric_difference_size, 
         #                              Method.BCH,
