@@ -140,6 +140,8 @@ def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: 
         sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
         sender_list.extend(receiver_list[:(receiver_size-1)])
 
+        del universe_without_receiver_set
+
     del universe_list
     gc.collect()
 
@@ -209,13 +211,13 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
                                     method=method, 
                                     set_inside_set=set_inside_set)
         
-        processes_num = multiprocessing.cpu_count() - 4
+        processes_num = multiprocessing.cpu_count() - 6
         # Use Pool to run trials in parallel
         with get_pool(processes_num) as pool:
             # Use imap_unordered for better performance with large number of items
             for i, cells_transmitted in enumerate(pool.imap_unordered(partial_run_trial, range(1, num_trials + 1))):
                 total_cells_transmitted += cells_transmitted
-                print(f"Trial {i+1}, Universe size {universe_size} completed: {cells_transmitted} cells transmitted")
+                print(f"Trial {i+1}, Universe size 0^{int(math.log10(universe_size))} completed: {cells_transmitted} cells transmitted")
 
         avg_total_cells_transmitted = math.ceil(total_cells_transmitted / num_trials)
         print("###############################################################################")
@@ -229,7 +231,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
                               results, csv_filename)
 
 def export_results_to_csv(header, results, csv_filename: str) -> None:
-    with open(os.path.join("./data", csv_filename), mode='w+', newline='') as file:
+    with open(os.path.join("./data", csv_filename), mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(header)
         writer.writerows(results)
