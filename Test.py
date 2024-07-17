@@ -184,7 +184,7 @@ def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: 
 
 @contextmanager
 def get_pool(processes_num):
-    with multiprocessing.Pool(processes=processes_num) as pool:
+    with multiprocessing.Pool(processes=processes_num, maxtasksperchild=1) as pool:
         yield pool
 
 def benchmark_set_reconciliation(symmetric_difference_size: int, 

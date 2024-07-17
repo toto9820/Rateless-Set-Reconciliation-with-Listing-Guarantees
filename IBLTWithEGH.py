@@ -9,14 +9,6 @@ from sympy import nextprime
 from numba import jit
 from memory_profiler import profile
 
-@jit(nopython=True)
-def generate_partial_mapping_matrix(prime, n):
-    partial_mapping_matrix = np.zeros((prime, n), dtype=np.int32)
-    for symbol in range(1, n + 1):
-        res = symbol % prime
-        partial_mapping_matrix[res, symbol - 1] = 1
-    return partial_mapping_matrix
-
 class IBLTWithEGH(IBLT):
     def __init__(self, symbols: List[int], n: int):
         """
@@ -61,13 +53,11 @@ class IBLTWithEGH(IBLT):
 
         self.primes.append(prime)
 
-        # partial_mapping_matrix = np.zeros((prime, self.n), dtype=int)
+        partial_mapping_matrix = np.zeros((prime, self.n), dtype=int)
 
-        # for symbol in range(1, self.n + 1):
-        #     res = symbol % prime
-        #     partial_mapping_matrix[res, symbol - 1] = 1
-
-        partial_mapping_matrix = generate_partial_mapping_matrix(prime, self.n)
+        for symbol in range(1, self.n + 1):
+            res = symbol % prime
+            partial_mapping_matrix[res, symbol - 1] = 1
 
         self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
 
