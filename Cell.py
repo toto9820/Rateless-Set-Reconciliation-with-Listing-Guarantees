@@ -1,10 +1,12 @@
 import numpy as np
 import operator
 import multiprocessing
+import itertools
 from hashlib import sha256
 # A faster hashing algorithm
 from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest 
 from functools import reduce
+from itertools import batched
 
 class Cell:
     def __init__(self, hash_func='xxh64'):
@@ -25,11 +27,11 @@ class Cell:
         # TODO - hash of transactions is in string and not int (they are the symbols) form - 
         # should enable to define options to symbols type - int, str, etc.
         if hash_func == 'xxh32':
-            self.hash_func = lambda x: xxh32_intdigest(x)
+            self.hash_func = xxh32_intdigest
         elif hash_func == 'xxh64':
-            self.hash_func = lambda x: xxh64_intdigest(x)
+            self.hash_func = xxh64_intdigest
         elif hash_func == 'xxh3_64':
-            self.hash_func = lambda x: xxh3_64_intdigest(x)
+            self.hash_func = xxh3_64_intdigest
         # TODO - not supported - lack of intdigest so xor with ^= not useful - fix!
         # elif hash_func == 'sha256':
         #     self.hash_func = lambda x: sha256(bytes(x)).hexdigest()
@@ -57,15 +59,7 @@ class Cell:
         self.counter += len(symbols)
 
         hashes = [self.hash_func(symbol) for symbol in symbols]
-
-        # hashes = []
-
-        # cpu_cores_count = multiprocessing.cpu_count()
-        # chunk_size = len(symbols) // cpu_cores_count + 1
-
-        # with multiprocessing.Pool(processes=cpu_cores_count) as pool:
-        #     hashes = pool.map(xxh64_intdigest, symbols, chunk_size)
-
+        
         self.sum ^= reduce(operator.xor, symbols)
         self.checksum ^= reduce(operator.xor, hashes)
 

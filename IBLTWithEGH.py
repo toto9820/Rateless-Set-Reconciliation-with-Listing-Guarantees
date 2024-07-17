@@ -7,7 +7,6 @@ from IBLT import IBLT
 from scipy.sparse import csr_matrix, vstack
 from sympy import nextprime
 from numba import jit
-from memory_profiler import profile
 
 class IBLTWithEGH(IBLT):
     def __init__(self, symbols: List[int], n: int):
@@ -53,13 +52,12 @@ class IBLTWithEGH(IBLT):
 
         self.primes.append(prime)
 
-        partial_mapping_matrix = np.zeros((prime, self.n), dtype=int)
+        symbols = np.arange(1, self.n + 1)
+        row_indices = symbols % prime
+        col_indices = symbols - 1
+        data = np.ones(self.n, dtype=int)
 
-        for symbol in range(1, self.n + 1):
-            res = symbol % prime
-            partial_mapping_matrix[res, symbol - 1] = 1
-
-        self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
+        self.partial_mapping_matrix = csr_matrix((data, (row_indices, col_indices)), shape=(prime, self.n))
 
         if iteration == 1:
             self.mapping_matrix = self.partial_mapping_matrix
