@@ -1,10 +1,10 @@
 import numpy as np
 import operator
+import multiprocessing
 from hashlib import sha256
 # A faster hashing algorithm
 from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest 
 from functools import reduce
-import multiprocessing
 
 class Cell:
     def __init__(self, hash_func='xxh64'):

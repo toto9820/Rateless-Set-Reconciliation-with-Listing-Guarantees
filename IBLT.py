@@ -8,16 +8,16 @@ from scipy.sparse import csr_matrix
 from scipy.sparse import csr_matrix
 
 class IBLT:
-    def __init__(self, symbols: Set[int], n: int):
+    def __init__(self, symbols: List[int], n: int):
         """
         Initializes the Rateless Invertible Bloom Lookup Table.
 
         Parameters:
-        - symbols (Set[int]): set of source symbols.
+        - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
         """
         # The sender/receiver set.
-        self.symbols = np.array(list(symbols))
+        self.symbols = np.array(symbols)
         # Symbols indices in 0 indexing.
         self.symbols_indices = self.symbols - 1
         # Universe size
@@ -49,7 +49,7 @@ class IBLT:
         # The size of the symmetric difference.
         self.symmetric_difference_size = 0
         # Sender set for debugging.
-        self.other_set_for_debug = set()
+        self.other_list_for_debug = set()
 
     def generate_mapping(self) -> None:
         """

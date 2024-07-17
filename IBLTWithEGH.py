@@ -7,6 +7,7 @@ from IBLT import IBLT
 from scipy.sparse import csr_matrix, vstack
 from sympy import nextprime
 from numba import jit
+from memory_profiler import profile
 
 @jit(nopython=True)
 def generate_partial_mapping_matrix(prime, n):
@@ -17,13 +18,13 @@ def generate_partial_mapping_matrix(prime, n):
     return partial_mapping_matrix
 
 class IBLTWithEGH(IBLT):
-    def __init__(self, symbols: Set[int], n: int):
+    def __init__(self, symbols: List[int], n: int):
         """
         Initializes the Invertible Bloom Lookup Table with
         combinatorial method EGH.
 
         Parameters:
-        - symbols (Set[int]): set of source symbols.
+        - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
         """
         super().__init__(symbols, n)

@@ -8,13 +8,13 @@ from scipy.sparse import csr_matrix, vstack
 from galois import GF, primitive_poly
 
 class IBLTWithBCH(IBLT):
-    def __init__(self, symbols: Set[int], n: int):
+    def __init__(self, symbols: List[int], n: int):
         """
         Initializes the Invertible Bloom Lookup Table with
         coding method BCH.
 
         Parameters:
-        - symbols (Set[int]): set of source symbols.
+        - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
         """
         super().__init__(symbols, n)
