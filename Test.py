@@ -391,6 +391,8 @@ if __name__ == "__main__":
     elif system == 'Windows':
         trials = 25 
 
+    universe_size = 1000
+
     print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
