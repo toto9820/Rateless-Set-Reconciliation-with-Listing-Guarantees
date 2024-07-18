@@ -137,7 +137,7 @@ def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: 
     
         del elements_to_remove
         del remove_set
-        
+
     else:
         receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
         receiver_list = random.sample(universe_list, receiver_size)
@@ -173,7 +173,7 @@ def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: 
         symmetric_difference = receiver.receive(sender_cells)
 
         if symmetric_difference:
-            print(f"Trial {trial_number}: Universe size {universe_size}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
+            print(f"Trial {trial_number}: Universe size 10^{int(math.log10(universe_size))}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
             sender.ack_queue.put("stop")
             break
 
@@ -220,7 +220,7 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
                                     method=method, 
                                     set_inside_set=set_inside_set)
         
-        processes_num = int(multiprocessing.cpu_count() * 0.8)
+        processes_num = int(multiprocessing.cpu_count() * 0.25)
         # Use Pool to run trials in parallel
         with get_pool(processes_num) as pool:
             # Use imap_unordered for better performance with large number of items
