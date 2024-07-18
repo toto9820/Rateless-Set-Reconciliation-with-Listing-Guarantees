@@ -158,9 +158,9 @@ class IBLT:
         # Failure to decode.
         if symmetric_difference == ["Decode Failure"]:
             return []
-        
-        if len(symmetric_difference) == 2:
-            print("debug stop")
+
+        elif symmetric_difference == ["empty set"]:
+            return "empty set"
                 
         return [int(symbol) for symbol in symmetric_difference]
     

@@ -1,4 +1,6 @@
 import math
+import platform
+from functools import partial
 from Utils import *
 
 def benchmark_universe_vs_cells_serial(symmetric_difference_size: int, 
@@ -28,7 +30,8 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
     universe_size_trial_cnt = 1
 
     # Iterate over universe sizes
-    for universe_size in [10**i for i in range(6, 7)]:
+    for universe_size in [10**i for i in range(2, 8)]:
+    # for universe_size in [10**i for i in range(6, 7)]:
         total_cells_transmitted = 0
 
         for trial in range(1, num_trials+1):
@@ -192,7 +195,7 @@ if __name__ == "__main__":
 
     universe_size = 1000
 
-    print("IBLT + EGH:")
+    # print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
 
@@ -220,7 +223,7 @@ if __name__ == "__main__":
         #                                     csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                                     set_inside_set = False)
 
-    print("IBLT + Extended Hamming Code:")
+    # print("IBLT + Extended Hamming Code:")
 
     # for symmetric_difference_size in [1,2,3]:
     #     benchmark_universe_vs_cells_parallel(symmetric_difference_size,
@@ -237,19 +240,15 @@ if __name__ == "__main__":
     #                                         csv_filename=f"extended_hamming_results/extended_hamming_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
     #                                         set_inside_set = False)
 
-    # For now - I can't use with multithreading due to issue with SQL - the 
-    # creator thread and using thread are different.
-    print("IBLT + BCH:")
+    # print("IBLT + BCH:")
 
     # for symmetric_difference_size in [1, 3, 10, 20]:
-    # for symmetric_difference_size in [20]:
-
-        # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
-        #                                     Method.BCH,
-        #                                     num_trials=trials, 
-        #                                     export_to_csv=True, 
-        #                                     csv_filename=f"bch_results/bch_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-        #                                     set_inside_set = True)
+    #     benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
+    #                                         Method.BCH,
+    #                                         num_trials=trials, 
+    #                                         export_to_csv=True, 
+    #                                         csv_filename=f"bch_results/bch_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+    #                                         set_inside_set = True)
 
         # profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
         #                 Method.BCH,
@@ -264,4 +263,30 @@ if __name__ == "__main__":
         #                                     export_to_csv=True, 
         #                                     csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                                     set_inside_set = False)
+        
+    print("IBLT + IDM:")
+    
+    # for symmetric_difference_size in [1, 3, 10, 20]:
+    for symmetric_difference_size in [3]:
+        # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
+        #                                     Method.IDM,
+        #                                     num_trials=trials, 
+        #                                     export_to_csv=True, 
+        #                                     csv_filename=f"idm_results/idm_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                                     set_inside_set = True)
+
+        profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
+                        Method.IDM,
+                        num_trials=trials, 
+                        export_to_csv=False, 
+                        csv_filename=f"idm_results/idm_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                        set_inside_set = True)
+
+        # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
+        #                                     Method.IDM,
+        #                                     num_trials=trials, 
+        #                                     export_to_csv=True, 
+        #                                     csv_filename=f"idm_results/idm_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                                     set_inside_set = False)
+        
             

@@ -1,39 +1,6 @@
 import platform
-import matplotlib as plt
+import matplotlib.pyplot as plt 
 from Utils import *
-
-#TODO - continue
-# def run_trial_rates_vs_cells(args):
-#     symmetric_difference_size, max_symmetric_diff_size, universe_size, method, set_inside_set = args
-    
-#     success_rates = [0] * 20 * max_symmetric_diff_size
-#     sender_iblt, receiver_iblt = generate_sender_receiver_iblts(symmetric_difference_size,
-#                                                                 method,
-#                                                                 set_inside_set)
-
-#     sender_cells = []
-#     receiver_cells = []
-#     num_iterations = 0
-
-#     while num_iterations < len(success_rates):
-#         sender_iblt.transmit()
-#         receiver_iblt.transmit()
-
-#         sender_cells.extend(cell for cell in iter(sender_iblt.cells_queue.get, "end"))
-#         receiver_cells.extend(cell for cell in iter(receiver_iblt.cells_queue.get, "end"))
-
-#         for i in range(len(sender_cells)):
-#             iblt_difference = receiver_iblt.calc_iblt_diff(sender_cells[:num_iterations+i+1], receiver_cells[:num_iterations+i+1])
-#             symmetric_difference = receiver_iblt.listing(iblt_difference, with_deocde_frac=True)
-            
-#             success_rates[num_iterations] = symmetric_difference[1] if symmetric_difference[0] == "Decode Failure" else 1
-#             num_iterations += 1
-            
-#             if num_iterations >= len(success_rates):
-#                 break
-
-#     gc.collect()
-#     return success_rates
 
 def calc_decode_success_rate(symmetric_difference_size: int, 
                                 max_symmetric_diff_size: int,
@@ -42,10 +9,6 @@ def calc_decode_success_rate(symmetric_difference_size: int,
                                 num_trials: int = 100,
                                 set_inside_set: bool = True):
     
-    # Declaring that we're using the global universe list variable.
-    global universe_list
-    universe_list = range(1, universe_size + 1)
-
     success_rates = [0] * 20 * max_symmetric_diff_size
 
     for _ in range(num_trials):
@@ -160,7 +123,7 @@ if __name__ == "__main__":
                       universe_size=universe_size, symmetric_diff_sizes=[1,3,10,20], 
                       num_trials=trials, export_to_csv=True, 
                       csv_dir=f"egh_results",
-                      set_inside_set=True)
+                      set_inside_set=False)
     
     print("IBLT + Extended Hamming Code:")
 
@@ -176,6 +139,6 @@ if __name__ == "__main__":
                     universe_size=universe_size, symmetric_diff_sizes=[1,3,7,10,15,20], 
                     num_trials=trials, export_to_csv=True, 
                     csv_dir=f"bch_results",
-                    set_inside_set=True)
+                    set_inside_set=False)
     
     

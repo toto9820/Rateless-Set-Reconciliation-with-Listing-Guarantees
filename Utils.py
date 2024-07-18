@@ -1,5 +1,7 @@
 import csv
 import os
+
+from IBLTWithIDM import IBLTWithIDM
 os.environ['OPENBLAS_NUM_THREADS'] = '1'  # Set the number of OpenBLAS threads to 1 to avoid conflicts in multiprocessing
 import random
 import cProfile
@@ -59,7 +61,8 @@ def generate_sender_receiver_iblts(symmetric_difference_size, method, set_inside
     iblt_classes = {
         Method.EGH: IBLTWithEGH,
         Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
-        Method.BCH: IBLTWithBCH
+        Method.BCH: IBLTWithBCH,
+        Method.IDM: IBLTWithIDM
     }
 
     # Create sender and receiver IBLTs using the selected method.
