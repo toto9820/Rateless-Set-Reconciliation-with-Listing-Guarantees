@@ -26,156 +26,6 @@ from IBLTWithBCH import IBLTWithBCH
 # to save memory.
 universe_list = range(1, 100)
 
-def benchmark_set_reconciliation(symmetric_difference_size: int, 
-                                 method: Method,
-                                 num_trials: int, 
-                                 export_to_csv: bool = False, 
-                                 csv_filename: str = "results.csv",
-                                 set_inside_set: bool = True):
-    
-    if set_inside_set:
-        print(f"Receiver set is a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
-    else:
-        print(f"Receiver set is not a super set of sender set symmetric_difference_size {symmetric_difference_size}")
-    
-    results = []
-    universe_size_trial_cnt = 1
-
-    for universe_size in [10**i for i in range(5, 6)]:
-    # for universe_size in [10**i for i in range(2, 6)]:    
-        total_cells_transmitted = 0
-
-        for trial in range(1, num_trials+1):
-            # Declaring that we're using the global universe list variable.
-            global universe_list 
-            universe_list = range(1, universe_size + 1)
-
-            if set_inside_set:
-                receiver_list = universe_list
-                sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
-            else:
-                receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
-                receiver_list = random.sample(universe_list, receiver_size)
-                universe_without_receiver_set = set(universe_list) - set(receiver_list)
-                sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
-                sender_list.extend(receiver_list[:(receiver_size-1)])
-
-                del universe_without_receiver_set
-            
-            iblt_classes = {
-                Method.EGH: IBLTWithEGH,
-                Method.BINARY_COVERING_ARRAY: IBLTWithCovArr,
-                Method.RECURSIVE_ARRAY: IBLTWithRecursiveArr,
-                Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
-                Method.BCH: IBLTWithBCH
-            }
-
-            sender = iblt_classes[method](sender_list, universe_size)
-            receiver = iblt_classes[method](receiver_list, universe_size)
-
-            receiver.other_list_for_debug = sender_list
-                    
-            symmetric_difference = []
-
-            while True:
-                sender_cells = []
-
-                sender.transmit()
-
-                while not sender.cells_queue.empty():
-                    cell = sender.cells_queue.get()
-
-                    # End of IBLT's cells transmitting.
-                    if cell == "end":
-                        break
-
-                    sender_cells.append(cell)
-
-                symmetric_difference = receiver.receive(sender_cells)
-
-                if symmetric_difference:
-                    sender.ack_queue.put("stop")
-                    break
-
-            total_cells_transmitted += len(receiver.iblt_diff_cells)
-            print(f"Symmetric difference in trail {trial}: {symmetric_difference}")
-
-        # Optimize memory usage by deleting large temporary objects
-        del universe_list
-        gc.collect()
-
-        avg_total_cells_transmitted =  math.ceil(total_cells_transmitted / num_trials)
-        print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
-        results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
-        universe_size_trial_cnt += 1
-
-    if export_to_csv:
-        export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
-                              results, csv_filename)
-
-
-# def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: int, method: Method, set_inside_set: bool) -> int:
-#     # Declaring that we're using the global universe list variable.
-#     global universe_list 
-
-#     if set_inside_set:
-#         receiver_list = universe_list
-#         sender_list = random.sample(universe_list, universe_size - symmetric_difference_size)
-#     else:
-#         receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
-#         receiver_list = random.sample(universe_list, receiver_size)
-#         universe_without_receiver_set = set(universe_list) - set(receiver_list)
-#         sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
-#         sender_list.extend(receiver_list[:(receiver_size-1)])
-
-#         del universe_without_receiver_set
-    
-#     iblt_classes = {
-#         Method.EGH: IBLTWithEGH,
-#         Method.BINARY_COVERING_ARRAY: IBLTWithCovArr,
-#         Method.RECURSIVE_ARRAY: IBLTWithRecursiveArr,
-#         Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
-#         Method.BCH: IBLTWithBCH
-#     }
-
-#     sender = iblt_classes[method](sender_list, universe_size)
-#     receiver = iblt_classes[method](receiver_list, universe_size)
-
-#     receiver.other_list_for_debug = sender_list
-
-#     while True:
-#         sender_cells = []
-#         sender.transmit()
-
-#         while not sender.cells_queue.empty():
-#             cell = sender.cells_queue.get()
-#             if cell == "end":
-#                 break
-#             sender_cells.append(cell)
-
-#         symmetric_difference = receiver.receive(sender_cells)
-
-#         if symmetric_difference:
-#             print(f"Trial {trial_number}: Universe size {universe_size}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
-#             sender.ack_queue.put("stop")
-#             break
-
-#     iblt_diff_cells_size = len(receiver.iblt_diff_cells)
-
-#     # Clean up
-#     del sender_list
-#     del receiver_list
-#     del sender
-#     del receiver
-#     gc.collect()
-
-#     return iblt_diff_cells_size
-
-# @contextmanager
-# def get_pool(processes_num):
-#     with multiprocessing.Pool(processes=processes_num, maxtasksperchild=1) as pool:
-#         yield pool
-
 # def benchmark_set_reconciliation(symmetric_difference_size: int, 
 #                                  method: Method,
 #                                  num_trials: int, 
@@ -183,44 +33,207 @@ def benchmark_set_reconciliation(symmetric_difference_size: int,
 #                                  csv_filename: str = "results.csv",
 #                                  set_inside_set: bool = True):
     
-#     print(f"{'Receiver set is' if set_inside_set else 'Receiver set is not'} a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+#     if set_inside_set:
+#         print(f"Receiver set is a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+#     else:
+#         print(f"Receiver set is not a super set of sender set symmetric_difference_size {symmetric_difference_size}")
     
 #     results = []
 #     universe_size_trial_cnt = 1
 
-#     # for universe_size in [10**i for i in range(1, 7)]:
-#     for universe_size in (10**i for i in range(7, 8)):
-#         # Declaring that we're using the global universe list variable.
-#         global universe_list 
-#         universe_list = range(1, universe_size + 1)
-        
+#     for universe_size in [10**i for i in range(6, 7)]:
+#     # for universe_size in [10**i for i in range(2, 6)]:    
 #         total_cells_transmitted = 0
 
-#         # Create a partial function with fixed arguments
-#         partial_run_trial = partial(run_trial, 
-#                                     universe_size=universe_size, 
-#                                     symmetric_difference_size=symmetric_difference_size, 
-#                                     method=method, 
-#                                     set_inside_set=set_inside_set)
-        
-#         processes_num = int(multiprocessing.cpu_count() * 0.8)
-#         # Use Pool to run trials in parallel
-#         with get_pool(processes_num) as pool:
-#             # Use imap_unordered for better performance with large number of items
-#             for i, cells_transmitted in enumerate(pool.imap_unordered(partial_run_trial, range(1, num_trials + 1))):
-#                 total_cells_transmitted += cells_transmitted
-#                 print(f"Trial {i+1}, Universe size 10^{int(math.log10(universe_size))} completed: {cells_transmitted} cells transmitted")
+#         for trial in range(1, num_trials+1):
+#             # Declaring that we're using the global universe list variable.
+#             global universe_list 
+#             universe_list = range(1, universe_size + 1)
 
-#         avg_total_cells_transmitted = math.ceil(total_cells_transmitted / num_trials)
-#         print("###############################################################################")
+#             if set_inside_set:
+#                 receiver_list = universe_list    
+#                 # Randomly select elements to remove
+#                 elements_to_remove = random.sample(universe_list, symmetric_difference_size)
+#                 # Create a set of elements to remove for faster lookup
+#                 remove_set = set(elements_to_remove)
+#                 # Create sender_list by including only elements not in remove_set
+#                 sender_list = [elem for elem in universe_list if elem not in remove_set]
+            
+#                 del elements_to_remove
+#                 del remove_set
+#             else:
+#                 receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
+#                 receiver_list = random.sample(universe_list, receiver_size)
+#                 universe_without_receiver_set = set(universe_list) - set(receiver_list)
+#                 sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
+#                 sender_list.extend(receiver_list[:(receiver_size-1)])
+
+#                 del universe_without_receiver_set
+            
+#             iblt_classes = {
+#                 Method.EGH: IBLTWithEGH,
+#                 Method.BINARY_COVERING_ARRAY: IBLTWithCovArr,
+#                 Method.RECURSIVE_ARRAY: IBLTWithRecursiveArr,
+#                 Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
+#                 Method.BCH: IBLTWithBCH
+#             }
+
+#             sender = iblt_classes[method](sender_list, universe_size)
+#             receiver = iblt_classes[method](receiver_list, universe_size)
+
+#             receiver.other_list_for_debug = sender_list
+                    
+#             symmetric_difference = []
+
+#             while True:
+#                 sender_cells = []
+
+#                 sender.transmit()
+
+#                 while not sender.cells_queue.empty():
+#                     cell = sender.cells_queue.get()
+
+#                     # End of IBLT's cells transmitting.
+#                     if cell == "end":
+#                         break
+
+#                     sender_cells.append(cell)
+
+#                 symmetric_difference = receiver.receive(sender_cells)
+
+#                 if symmetric_difference:
+#                     sender.ack_queue.put("stop")
+#                     break
+
+#             total_cells_transmitted += len(receiver.iblt_diff_cells)
+#             print(f"Symmetric difference in trail {trial}: {symmetric_difference}")
+
+#         # Optimize memory usage by deleting large temporary objects
+#         del universe_list
+#         gc.collect()
+
+#         avg_total_cells_transmitted =  math.ceil(total_cells_transmitted / num_trials)
 #         print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
-#         print("###############################################################################")
 #         results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
 #         universe_size_trial_cnt += 1
 
 #     if export_to_csv:
 #         export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
 #                               results, csv_filename)
+
+
+def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: int, method: Method, set_inside_set: bool) -> int:
+    # Declaring that we're using the global universe list variable.
+    global universe_list 
+
+    if set_inside_set:
+        receiver_list = universe_list
+        # Randomly select elements to remove
+        elements_to_remove = random.sample(universe_list, symmetric_difference_size)
+        # Create a set of elements to remove for faster lookup
+        remove_set = set(elements_to_remove)
+        # Create sender_list by including only elements not in remove_set
+        sender_list = [elem for elem in universe_list if elem not in remove_set]            
+    else:
+        receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
+        receiver_list = random.sample(universe_list, receiver_size)
+        universe_without_receiver_set = set(universe_list) - set(receiver_list)
+        sender_list = list(universe_without_receiver_set)[:symmetric_difference_size-1]
+        sender_list.extend(receiver_list[:(receiver_size-1)])
+
+        del universe_without_receiver_set
+    
+    iblt_classes = {
+        Method.EGH: IBLTWithEGH,
+        Method.BINARY_COVERING_ARRAY: IBLTWithCovArr,
+        Method.RECURSIVE_ARRAY: IBLTWithRecursiveArr,
+        Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
+        Method.BCH: IBLTWithBCH
+    }
+
+    sender = iblt_classes[method](sender_list, universe_size)
+    receiver = iblt_classes[method](receiver_list, universe_size)
+
+    receiver.other_list_for_debug = sender_list
+
+    while True:
+        sender_cells = []
+        sender.transmit()
+
+        while not sender.cells_queue.empty():
+            cell = sender.cells_queue.get()
+            if cell == "end":
+                break
+            sender_cells.append(cell)
+
+        symmetric_difference = receiver.receive(sender_cells)
+
+        if symmetric_difference:
+            print(f"Trial {trial_number}: Universe size {universe_size}, Symmetric difference {symmetric_difference}, Cells transmitted {len(receiver.iblt_diff_cells)}")
+            sender.ack_queue.put("stop")
+            break
+
+    iblt_diff_cells_size = len(receiver.iblt_diff_cells)
+
+    # Clean up
+    del sender_list
+    del receiver_list
+    del sender
+    del receiver
+    gc.collect()
+
+    return iblt_diff_cells_size
+
+@contextmanager
+def get_pool(processes_num):
+    with multiprocessing.Pool(processes=processes_num, maxtasksperchild=1) as pool:
+        yield pool
+
+def benchmark_set_reconciliation(symmetric_difference_size: int, 
+                                 method: Method,
+                                 num_trials: int, 
+                                 export_to_csv: bool = False, 
+                                 csv_filename: str = "results.csv",
+                                 set_inside_set: bool = True):
+    
+    print(f"{'Receiver set is' if set_inside_set else 'Receiver set is not'} a super set of sender set for symmetric_difference_size {symmetric_difference_size}")
+    
+    results = []
+    universe_size_trial_cnt = 1
+
+    # for universe_size in [10**i for i in range(1, 7)]:
+    for universe_size in (10**i for i in range(7, 8)):
+        # Declaring that we're using the global universe list variable.
+        global universe_list 
+        universe_list = range(1, universe_size + 1)
+        
+        total_cells_transmitted = 0
+
+        # Create a partial function with fixed arguments
+        partial_run_trial = partial(run_trial, 
+                                    universe_size=universe_size, 
+                                    symmetric_difference_size=symmetric_difference_size, 
+                                    method=method, 
+                                    set_inside_set=set_inside_set)
+        
+        processes_num = int(multiprocessing.cpu_count() * 0.8)
+        # Use Pool to run trials in parallel
+        with get_pool(processes_num) as pool:
+            # Use imap_unordered for better performance with large number of items
+            for i, cells_transmitted in enumerate(pool.imap_unordered(partial_run_trial, range(1, num_trials + 1))):
+                total_cells_transmitted += cells_transmitted
+                print(f"Trial {i+1}, Universe size 10^{int(math.log10(universe_size))} completed: {cells_transmitted} cells transmitted")
+
+        avg_total_cells_transmitted = math.ceil(total_cells_transmitted / num_trials)
+        print("###############################################################################")
+        print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f}")
+        print("###############################################################################")
+        results.append((universe_size_trial_cnt, universe_size, avg_total_cells_transmitted))
+        universe_size_trial_cnt += 1
+
+    if export_to_csv:
+        export_results_to_csv(["Trial", "Universe Size", "Cells Transmitted"],
+                              results, csv_filename)
 
 def export_results_to_csv(header, results, csv_filename: str) -> None:
     with open(os.path.join("./data", csv_filename), mode='w', newline='') as file:
@@ -380,7 +393,8 @@ if __name__ == "__main__":
     system = platform.system()
 
     if system == 'Linux':
-        trials = 100 
+        # trials = 100 
+        trials = 20 
 
     elif system == 'Windows':
         trials = 25 

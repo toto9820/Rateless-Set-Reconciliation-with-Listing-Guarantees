@@ -4,9 +4,8 @@ import multiprocessing
 import itertools
 from hashlib import sha256
 # A faster hashing algorithm
-from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest 
+from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest, xxh64_hexdigest 
 from functools import reduce
-from itertools import batched
 
 class Cell:
     def __init__(self, hash_func='xxh64'):
@@ -38,6 +37,8 @@ class Cell:
         #     self.checksum = self.hash_func(self.sum)
         else:
             raise ValueError("Invalid hash function specified. Choose 'xxh32', 'xxh64', 'xxh3_64 or 'sha256'.")
+        
+        self.vectorized_hash_func = np.vectorize(self.hash_func, otypes=[np.uint64])
 
     def add(self, symbol: int) -> None:
         """
@@ -57,11 +58,11 @@ class Cell:
             return 
         
         self.counter += len(symbols)
-
-        hashes = [self.hash_func(symbol) for symbol in symbols]
-        
-        self.sum ^= reduce(operator.xor, symbols)
-        self.checksum ^= reduce(operator.xor, hashes)
+        self.sum ^= np.bitwise_xor.reduce(symbols)
+         
+        hashes = self.vectorized_hash_func(list(symbols))
+        hashes_xor = np.bitwise_xor.reduce(hashes)
+        self.checksum ^= int(hashes_xor)
 
     def remove(self, symbol: int) -> None:
         """
