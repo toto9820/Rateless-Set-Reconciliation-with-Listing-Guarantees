@@ -134,6 +134,10 @@ def run_trial(trial_number: int, universe_size: int, symmetric_difference_size: 
         remove_set = set(elements_to_remove)
         # Create sender_list by including only elements not in remove_set
         sender_list = [elem for elem in universe_list if elem not in remove_set]            
+    
+        del elements_to_remove
+        del remove_set
+        
     else:
         receiver_size = max(symmetric_difference_size, random.randint(1, universe_size - symmetric_difference_size))
         receiver_list = random.sample(universe_list, receiver_size)
