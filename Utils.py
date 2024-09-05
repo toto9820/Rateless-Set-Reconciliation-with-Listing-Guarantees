@@ -1,7 +1,5 @@
 import csv
 import os
-
-from IBLTWithIDM import IBLTWithIDM
 os.environ['OPENBLAS_NUM_THREADS'] = '1'  # Set the number of OpenBLAS threads to 1 to avoid conflicts in multiprocessing
 import random
 import cProfile
@@ -13,46 +11,54 @@ from contextlib import contextmanager
 from Method import Method
 from IBLTWithEGH import IBLTWithEGH
 from IBLTWithExtendedHamming import IBLTWithExtendedHamming
-from IBLTWithBCH import IBLTWithBCH
+
+# method (Method): The method to use for creating IBLTs.
+# methods = [Method.EGH, 
+#            Method.OLS, 
+#            Method.ID, 
+#            Method.EXTENDED_HAMMING_CODE]
+
+methods = [Method.EGH]
 
 # Global universe list shared between pool of processes to save memory.
-universe_list = range(1, 100)
 
-def generate_sender_receiver_iblts(symmetric_difference_size, method, set_inside_set):
+def generate_participants_iblts(universe_size, symmetric_difference_size, method, set_inside_set):
     """
-    Generate sender and receiver lists based on the given parameters.
+    Generate participants lists based on the given parameters.
     
     Parameters:
         symmetric_difference_size (int): The size of the symmetric difference.
         method (Method): The method to use for creating IBLTs.
-        set_inside_set (bool): Flag indicating whether the receiver list should be a subset of the universe list.
+        set_inside_set (bool): Flag indicating whether a superset assumption holds, i.e. one participant's set
+        includes the other.
     
     Returns:
-        tuple: A tuple containing the sender IBLT and the receiver IBLT.
+        tuple: A tuple containing the participants' IBLTs.
     """
     # Declaring that we're using the global universe list variable.
-    global universe_list
+    universe_list = range(1, universe_size)
 
     if set_inside_set:
-        # Create receiver list from the universe list.
-        receiver_list = universe_list
-        # Randomly select elements to remove from the universe list to create the sender list.
+        # Create list of participant 2 from the universe list.
+        p2_list = universe_list
+        # Randomly select elements to remove from the universe list 
+        # to create the list of participant 1.
         elements_to_remove = random.sample(universe_list, symmetric_difference_size)
         remove_set = set(elements_to_remove)
-        sender_list = [elem for elem in universe_list if elem not in remove_set]
+        p1_list = [elem for elem in universe_list if elem not in remove_set]
         
         del elements_to_remove
         del remove_set
         
     else:
-        # Randomly determine the receiver list size and create it.
-        receiver_size = max(symmetric_difference_size, random.randint(1, len(universe_list) - symmetric_difference_size))
-        receiver_list = random.sample(universe_list, receiver_size)
-        universe_without_receiver_set = set(universe_list) - set(receiver_list)
-        sender_list = list(universe_without_receiver_set)[:symmetric_difference_size - 1]
-        sender_list.extend(receiver_list[:receiver_size - 1])
+        # Randomly determine the size of participant 2 list and create it.
+        p2_size = max(symmetric_difference_size, random.randint(1, len(universe_list) - symmetric_difference_size))
+        p2_list = random.sample(universe_list, p2_size)
+        universe_without_p2_set = set(universe_list) - set(p2_list)
+        p1_list = list(universe_without_p2_set)[:symmetric_difference_size - 1]
+        p1_list.extend(p2_list[:p2_size - 1])
         
-        del universe_without_receiver_set
+        del universe_without_p2_set
 
     # Clean up memory.
     gc.collect()
@@ -60,23 +66,24 @@ def generate_sender_receiver_iblts(symmetric_difference_size, method, set_inside
     # Dictionary mapping methods to their corresponding IBLT classes.
     iblt_classes = {
         Method.EGH: IBLTWithEGH,
-        Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming,
-        Method.BCH: IBLTWithBCH,
-        Method.IDM: IBLTWithIDM
+        # Method.OLS: IBLTWithOLS,
+        # Method.ID: IBLTWithID,
+        Method.EXTENDED_HAMMING_CODE: IBLTWithExtendedHamming
     }
 
     # Create sender and receiver IBLTs using the selected method.
-    sender_iblt = iblt_classes[method](sender_list, len(universe_list))
-    receiver_iblt = iblt_classes[method](receiver_list, len(universe_list))
+    p1_iblt = iblt_classes[method](p1_list, len(universe_list))
+    p2_iblt = iblt_classes[method](p2_list, len(universe_list))
 
-    # For debugging: store sender list in receiver IBLT.
-    receiver_iblt.other_list_for_debug = sender_list.copy()
+    # For debugging: store particpant 1's list in 
+    # participant 2's IBLT object.
+    p2_iblt.other_list_for_debug = p1_iblt
 
-    del sender_list
-    del receiver_list
+    del p1_list
+    del p2_list
     gc.collect()
         
-    return sender_iblt, receiver_iblt
+    return p1_iblt, p2_iblt
 
 @contextmanager
 def get_pool(processes_num):

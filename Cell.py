@@ -81,7 +81,7 @@ class Cell:
         """
         Check if the cell is pure - containing one element.
         """
-        if np.abs(self.counter) != 1 or self.sum == 0:
+        if abs(self.counter) != 1 or self.sum == 0:
             return False
 
         return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_func(self.sum))

@@ -30,8 +30,8 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
     universe_size_trial_cnt = 1
 
     # Iterate over universe sizes
-    for universe_size in [10**i for i in range(2, 8)]:
-    # for universe_size in [10**i for i in range(6, 7)]:
+    # for universe_size in [10**i for i in range(2, 8)]:
+    for universe_size in [10**i for i in range(6, 7)]:
         total_cells_transmitted = 0
 
         for trial in range(1, num_trials+1):
@@ -39,30 +39,25 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
             global universe_list 
             universe_list = range(1, universe_size + 1)
 
-            sender_iblt, receiver_iblt = generate_sender_receiver_iblts(symmetric_difference_size,
-                                                                        method,
-                                                                        set_inside_set)
+            p1_iblt, p2_iblt = generate_participants_iblts(universe_size,
+                                                   symmetric_difference_size,
+                                                   method,
+                                                   set_inside_set)
                   
             symmetric_difference = []
 
             # Reconcile the sets
             while True:
-                sender_cells = []
-                sender_iblt.transmit()
+                p1_cells = p1_iblt.encode()
 
-                while not sender_iblt.cells_queue.empty():
-                    cell = sender_iblt.cells_queue.get()
-                    if cell == "end":
-                        break
-                    sender_cells.append(cell)
 
-                symmetric_difference = receiver_iblt.receive(sender_cells)
+                symmetric_difference = p2_iblt.decode(p1_cells)
+
 
                 if symmetric_difference:
-                    receiver_iblt.ack_queue.put("stop")
                     break
 
-            total_cells_transmitted += len(receiver_iblt.iblt_diff_cells)
+            total_cells_transmitted += len(p2_iblt.iblt_diff_cells)
             print(f"Symmetric difference in trial {trial}: {symmetric_difference}")
 
         # Optimize memory usage by deleting large temporary objects
@@ -95,13 +90,13 @@ def run_trial_cells_vs_universe(trial_number: int, universe_size: int, symmetric
     # Declaring that we're using the global universe list variable.
     global universe_list 
 
-    sender_iblt, receiver_iblt = generate_sender_receiver_iblts(symmetric_difference_size,
+    sender_iblt, receiver_iblt = generate_participants_iblts(symmetric_difference_size,
                                                                 method,
                                                                 set_inside_set)
             
     while True:
         sender_cells = []
-        sender_iblt.transmit()
+        sender_iblt.encode()
 
         while not sender_iblt.cells_queue.empty():
             cell = sender_iblt.cells_queue.get()
@@ -191,16 +186,16 @@ if __name__ == "__main__":
         # trials = 20 
 
     elif system == 'Windows':
-        trials = 25 
+        trials = 10 
 
-    universe_size = 1000
+    universe_size = 10**6
 
     # print("IBLT + EGH:")
 
     # symmetric_difference_size is parameter d.
 
     # for symmetric_difference_size in [1, 3, 10, 20]:
-    # for symmetric_difference_size in [20]:
+    for symmetric_difference_size in [5]:
 
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.EGH,
@@ -209,12 +204,12 @@ if __name__ == "__main__":
         #                                     csv_filename=f"egh_results/egh_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                                     set_inside_set = True)
 
-        # profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
-        #                 Method.EGH,
-        #                 num_trials=trials, 
-        #                 export_to_csv=False, 
-        #                 csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-        #                 set_inside_set = True)
+        profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
+                        Method.EGH,
+                        num_trials=trials, 
+                        export_to_csv=False, 
+                        csv_filename=f"egh_results/egh_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+                        set_inside_set = True)
 
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.EGH,
@@ -264,10 +259,10 @@ if __name__ == "__main__":
         #                                     csv_filename=f"bch_results/bch_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                                     set_inside_set = False)
         
-    print("IBLT + IDM:")
+    print("IBLT + ID:")
     
     # for symmetric_difference_size in [1, 3, 10, 20]:
-    for symmetric_difference_size in [3]:
+    # for symmetric_difference_size in [3]:
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.IDM,
         #                                     num_trials=trials, 
@@ -275,12 +270,12 @@ if __name__ == "__main__":
         #                                     csv_filename=f"idm_results/idm_results_receiver_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
         #                                     set_inside_set = True)
 
-        profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
-                        Method.IDM,
-                        num_trials=trials, 
-                        export_to_csv=False, 
-                        csv_filename=f"idm_results/idm_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
-                        set_inside_set = True)
+        # profile_function(benchmark_universe_vs_cells_serial, symmetric_difference_size, 
+        #                 Method.IDM,
+        #                 num_trials=trials, 
+        #                 export_to_csv=False, 
+        #                 csv_filename=f"idm_results/idm_results_receiver_not_includes_sender_symmetric_diff_size_{symmetric_difference_size}.csv", 
+        #                 set_inside_set = True)
 
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.IDM,

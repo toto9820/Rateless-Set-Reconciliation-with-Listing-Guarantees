@@ -1,6 +1,6 @@
 import platform
 import matplotlib.pyplot as plt 
-from Utils import *
+from Utils.Utils import *
 
 def calc_decode_success_rate(symmetric_difference_size: int, 
                                 max_symmetric_diff_size: int,
@@ -24,27 +24,27 @@ def calc_decode_success_rate(symmetric_difference_size: int,
         num_iterations = 0 
 
         while True:
-            sender_iblt.transmit()
+            sender_cells = sender_iblt.encode()
 
-            while not sender_iblt.cells_queue.empty():
-                cell = sender_iblt.cells_queue.get()
+            # while not sender_iblt.cells_queue.empty():
+            #     cell = sender_iblt.cells_queue.get()
 
-                # End of IBLT's cells transmitting.
-                if cell == "end":
-                    break
+            #     # End of IBLT's cells transmitting.
+            #     if cell == "end":
+            #         break
 
-                sender_cells.append(cell)
+            #     sender_cells.append(cell)
 
-            receiver_iblt.transmit()
+            reciver_cells =  receiver_iblt.encode()
 
-            while not receiver_iblt.cells_queue.empty():
-                cell = receiver_iblt.cells_queue.get()
+            # while not receiver_iblt.cells_queue.empty():
+            #     cell = receiver_iblt.cells_queue.get()
 
-                # End of IBLT's cells transmitting.
-                if cell == "end":
-                    break
+            #     # End of IBLT's cells transmitting.
+            #     if cell == "end":
+            #         break
 
-                reciver_cells.append(cell)
+            #     reciver_cells.append(cell)
 
             initial_prob_idx = num_iterations
 

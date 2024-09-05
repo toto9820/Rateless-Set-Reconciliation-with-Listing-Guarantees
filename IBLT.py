@@ -61,9 +61,9 @@ class IBLT:
         """
         raise NotImplementedError("Please Implement this method")
 
-    def transmit(self) -> None:
+    def encode(self) -> list[Cell]:
         """
-        Sends each iteration amount of IBLT cells of the sender to the receiver.
+        Encodes specific amount of IBLT cells.
         """
         if not self.ack_queue.empty():
             ack = self.ack_queue.get()
@@ -83,35 +83,18 @@ class IBLT:
         iblt_sender_cells = [Cell() for _ in range(rows)]
 
         for row in range(rows):
-            # Get the indices where the row has a value of 1.
-            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
-            # Get the symbols corresponding to these indices.
-            mapped_symbols = mask_symbols_indices + 1
-
-            # for symbol in mapped_symbols:
-            #     iblt_sender_cells[row].add(symbol)
+            # Get the boolean mask where the row has a value of 1.
+            mask_symbols = np.isin(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # Get the symbols corresponding to the boolean mask.
+            mapped_symbols = self.partial_mapping_matrix[row].indices[mask_symbols] + 1
 
             iblt_sender_cells[row].add_multiple(mapped_symbols)
 
-        for c in iblt_sender_cells:
-            self.cells_queue.put(c)
-
-        self.cells_queue.put("end")
-
-    def sender_should_halt_check(self) -> bool:
-        """
-        Checks if a stopping condition specific to method is met and 
-        accordingly tell the sender to stop transmitting cells.
-
-        Returns:
-        - bool: True - stop/ False - continue.
-        """
-        return False
+        return iblt_sender_cells
     
-    def receive(self, iblt_sender_cells: List[Cell]) -> List[int]:
+    def decode(self, iblt_sender_cells: List[Cell]) -> List[int]:
         """
-        Receives transmitted cells and performs decoding to retrieve 
-        the symmetric difference.
+        Decodes cells to retrieve the symmetric difference.
 
         Parameters:
         - iblt_sender_cells (List[int]): List of IBLT cells from the sender.
@@ -129,27 +112,10 @@ class IBLT:
             # Calculate number of elements received from sender.
             self.sender_set_size = sum([c.counter for c in iblt_sender_cells])
         
-        self.generate_mapping(self.receive_iterations)
-
-        # Add IBLT cells for the receiver.
-        rows = self.partial_mapping_matrix.shape[0]
-
-        iblt_receiver_cells = [Cell() for _ in range(rows)]
-
-        for row in range(rows):
-            # Get the indices where the row has a value of 1.
-            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
-            # Get the symbols corresponding to these indices.
-            mapped_symbols = mask_symbols_indices + 1
-
-            # for symbol in mapped_symbols:
-            #     iblt_receiver_cells[row].add(symbol)
-
-            iblt_receiver_cells[row].add_multiple(mapped_symbols)
+        iblt_receiver_cells = self.encode()
 
         self.iblt_receiver_cells.extend(iblt_receiver_cells)
    
-
         self.iblt_diff_cells = self.calc_iblt_diff(self.iblt_sender_cells,
                                                    self.iblt_receiver_cells)
 
@@ -176,16 +142,13 @@ class IBLT:
         Returns:
         - List[int]: IBLT cells of the symmetric difference.
         """
-        iblt_diff = []
-               
-        for cell_idx in range(len(iblt_receiver_cells)):
-            iblt_diff.append(Cell())  
+        iblt_diff = [Cell() for _ in range(len(iblt_receiver_cells))]
             
+        for cell_idx in range(len(iblt_receiver_cells)):
             iblt_diff[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
             iblt_diff[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
             iblt_diff[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
 
-        
         return iblt_diff
     
     
@@ -228,7 +191,7 @@ class IBLT:
             
             symbols.append(symbol)
 
-            mapped_rows = np.where(self.mapping_matrix[:, symbol-1].toarray() == 1)[0]
+            mapped_rows = self.mapping_matrix[:, symbol-1].nonzero()[0]
             
             for row in mapped_rows:
                 if row < len(cells):
