@@ -31,7 +31,7 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
 
     # Iterate over universe sizes
     # for universe_size in [10**i for i in range(2, 8)]:
-    for universe_size in [10**i for i in range(6, 7)]:
+    for universe_size in [10**i for i in range(1, 2)]:
         total_cells_transmitted = 0
 
         for trial in range(1, num_trials+1):

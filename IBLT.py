@@ -113,13 +113,16 @@ class IBLT:
             self.sender_set_size = sum([c.counter for c in iblt_sender_cells])
         
         iblt_receiver_cells = self.encode()
-
         self.iblt_receiver_cells.extend(iblt_receiver_cells)
    
-        self.iblt_diff_cells = self.calc_iblt_diff(self.iblt_sender_cells,
-                                                   self.iblt_receiver_cells)
+        self.iblt_diff_cells, includes_pure_cells = self.calc_iblt_diff(self.iblt_sender_cells,
+                                                                        self.iblt_receiver_cells)
+                
+        symmetric_difference = ["Decode Failure"]
 
-        symmetric_difference = self.listing(self.iblt_diff_cells)
+        # Early Failure to save time by wasted listing.
+        if includes_pure_cells:
+            symmetric_difference = self.listing(self.iblt_diff_cells)
         
         # Failure to decode.
         if symmetric_difference == ["Decode Failure"]:
@@ -142,14 +145,21 @@ class IBLT:
         Returns:
         - List[int]: IBLT cells of the symmetric difference.
         """
-        iblt_diff = [Cell() for _ in range(len(iblt_receiver_cells))]
+        includes_pure_cells = False
+        iblt_diff_cells = [Cell() for _ in range(len(iblt_receiver_cells))]
             
         for cell_idx in range(len(iblt_receiver_cells)):
-            iblt_diff[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
-            iblt_diff[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
-            iblt_diff[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
+            iblt_diff_cells[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
+            iblt_diff_cells[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
+            iblt_diff_cells[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
 
-        return iblt_diff
+            # For early failure and skipping listing procedure for
+            # current iteration.
+            if includes_pure_cells == False:
+                if iblt_diff_cells[cell_idx].is_pure_cell():
+                    includes_pure_cells = True
+
+        return iblt_diff_cells, includes_pure_cells
     
     
     def listing(self, cells: List[Cell], with_deocde_frac: bool = False) -> List[int]:
@@ -191,6 +201,7 @@ class IBLT:
             
             symbols.append(symbol)
 
+            # mapped_rows = self.mapping_matrix[:, symbol-1].nonzero()[0]
             mapped_rows = self.mapping_matrix[:, symbol-1].nonzero()[0]
             
             for row in mapped_rows:

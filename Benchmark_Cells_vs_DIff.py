@@ -61,8 +61,9 @@ def benchmark_cells_vs_diff(universe_size: int,
     for method in methods:
         results = []
             
-        for symmetric_diff_size in [10**i for i in 
-                                    range(0, symmetric_diff_trials+1)]:
+        # for symmetric_diff_size in [10**i for i in 
+        #                             range(0, symmetric_diff_trials+1)]:
+        for symmetric_diff_size in [1000]:
         
             total_cells_transmitted = 0
 
@@ -74,6 +75,7 @@ def benchmark_cells_vs_diff(universe_size: int,
                                         set_inside_set=set_inside_set)
             
             processes_num = int(multiprocessing.cpu_count() * 0.75)
+            # processes_num = 1
 
             # Use Pool to run trials in parallel
             with get_pool(processes_num) as pool:
