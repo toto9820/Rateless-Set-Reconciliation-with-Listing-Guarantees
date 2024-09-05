@@ -61,9 +61,8 @@ def benchmark_cells_vs_diff(universe_size: int,
     for method in methods:
         results = []
             
-        # for symmetric_diff_size in [10**i for i in 
-        #                             range(0, symmetric_diff_trials+1)]:
-        for symmetric_diff_size in [10]:
+        for symmetric_diff_size in [10**i for i in 
+                                    range(0, symmetric_diff_trials+1)]:
         
             total_cells_transmitted = 0
 
@@ -104,9 +103,9 @@ if __name__ == "__main__":
     if system == 'Linux':
         trials_per_symmetric_diff = 100 
     elif system == 'Windows':
-        trials_per_symmetric_diff = 20 
+        trials_per_symmetric_diff = 10 
 
-    export_to_csv = False
+    export_to_csv = True
     set_inside_set = True
 
     # benchmark_cells_vs_diff(universe_size,

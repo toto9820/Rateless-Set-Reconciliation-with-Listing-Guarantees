@@ -195,7 +195,7 @@ if __name__ == "__main__":
     # symmetric_difference_size is parameter d.
 
     # for symmetric_difference_size in [1, 3, 10, 20]:
-    for symmetric_difference_size in [5]:
+    for symmetric_difference_size in [50]:
 
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.EGH,
