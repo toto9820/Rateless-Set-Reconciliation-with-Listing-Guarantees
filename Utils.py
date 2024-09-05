@@ -36,7 +36,7 @@ def generate_participants_iblts(universe_size, symmetric_difference_size, method
         tuple: A tuple containing the participants' IBLTs.
     """
     # Declaring that we're using the global universe list variable.
-    universe_list = range(1, universe_size)
+    universe_list = range(1, universe_size + 1)
 
     if set_inside_set:
         # Create list of participant 2 from the universe list.

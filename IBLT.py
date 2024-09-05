@@ -83,10 +83,10 @@ class IBLT:
         iblt_sender_cells = [Cell() for _ in range(rows)]
 
         for row in range(rows):
-            # Get the boolean mask where the row has a value of 1.
-            mask_symbols = np.isin(self.partial_mapping_matrix[row].indices, self.symbols_indices)
-            # Get the symbols corresponding to the boolean mask.
-            mapped_symbols = self.partial_mapping_matrix[row].indices[mask_symbols] + 1
+            # Get the indices where the row has a value of 1.
+            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # Get the symbols corresponding to these indices.
+            mapped_symbols = mask_symbols_indices + 1
 
             iblt_sender_cells[row].add_multiple(mapped_symbols)
 

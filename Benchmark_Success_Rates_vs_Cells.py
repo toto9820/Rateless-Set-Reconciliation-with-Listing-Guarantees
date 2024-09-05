@@ -1,6 +1,6 @@
 import platform
 import matplotlib.pyplot as plt 
-from Utils.Utils import *
+from Utils import *
 
 def calc_decode_success_rate(symmetric_difference_size: int, 
                                 max_symmetric_diff_size: int,
@@ -14,7 +14,7 @@ def calc_decode_success_rate(symmetric_difference_size: int,
     for _ in range(num_trials):
         end_trial = False
 
-        sender_iblt, receiver_iblt = generate_sender_receiver_iblts(symmetric_difference_size,
+        sender_iblt, receiver_iblt = generate_participants_iblts(symmetric_difference_size,
                                                                     method,
                                                                     set_inside_set)
 
