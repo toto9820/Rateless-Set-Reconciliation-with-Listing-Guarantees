@@ -4,17 +4,30 @@ from typing import List, Set, Tuple
 from Cell import Cell
 from queue import Queue
 from functools import reduce
-from scipy.sparse import csr_matrix
+import numba as nb
 from scipy.sparse import csr_matrix
 
+@nb.njit(parallel=True)
+def is_in_set_pnb(a, b):
+    n = len(a)
+    result = np.zeros(n, dtype=np.bool_)
+    set_b = set(b)
+
+    for i in nb.prange(n):
+        result[i] = a[i] in set_b
+
+    return result
+
 class IBLT:
-    def __init__(self, symbols: List[int], n: int):
+    def __init__(self, symbols: List[int], n: int, set_inside_set: bool = True):
         """
         Initializes the Rateless Invertible Bloom Lookup Table.
 
         Parameters:
         - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
+        - set_inside_set (bool) - flag indicating whether a superset assumption holds, i.e. one participant's set
+        includes the other.
         """
         # The sender/receiver set.
         self.symbols = np.array(symbols)
@@ -22,6 +35,8 @@ class IBLT:
         self.symbols_indices = self.symbols - 1
         # Universe size
         self.n = n 
+        # Superset assumption
+        self.set_inside_set = set_inside_set
         # Partial mapping matrix of each symbol to IBLT cells.
         self.partial_mapping_matrix = []
         # The whole mapping matrix of each symbol to IBLT cells (sparse - to save memory).
@@ -45,7 +60,7 @@ class IBLT:
         # IBLT cells of the receiver.
         self.iblt_receiver_cells = []
         # IBLT cells of the symmetric difference.
-        self.iblt_diff_cells = []
+        self.diff_cells = []
         # The size of the symmetric difference.
         self.symmetric_difference_size = 0
         # Sender set for debugging.
@@ -80,15 +95,35 @@ class IBLT:
         # Add IBLT cells for the sender.
         rows = self.partial_mapping_matrix.shape[0]
 
-        iblt_sender_cells = [Cell() for _ in range(rows)]
+        iblt_sender_cells = [Cell(self.set_inside_set) for _ in range(rows)]
 
         for row in range(rows):
-            # Get the indices where the row has a value of 1.
-            mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
-            # Get the symbols corresponding to these indices.
-            mapped_symbols = mask_symbols_indices + 1
+            # # Get the indices where the row has a value of 1.
+            # mask_symbols_indices = np.intersect1d(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # # Get the symbols corresponding to these indices.
+            # mapped_symbols = mask_symbols_indices + 1
 
-            iblt_sender_cells[row].add_multiple(mapped_symbols)
+            # # Get the boolean mask where the row has a value of 1.
+            # mask_symbols = np.isin(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+            # # Get the corresponding symbols where a row has a value of 1.
+            # mapped_symbols = self.partial_mapping_matrix[row].indices[mask_symbols] + 1
+
+            # For faster execution
+            if self.set_inside_set:
+                # # Convert the sparse row to a dense array
+                # row_array = self.partial_mapping_matrix[row].toarray().flatten()
+
+                # # Create a boolean mask for the symbols
+                # symbols_mask_1 = np.zeros(row_array.shape, dtype=bool)
+                # symbols_mask_1[self.symbols_indices] = True
+
+                # # Use boolean indexing to get the mapped symbols
+                # mapped_symbols_1 = np.where((row_array == 1) & symbols_mask_1)[0] + 1
+
+                symbols_mask_1 = is_in_set_pnb(self.partial_mapping_matrix[row].indices, self.symbols_indices)
+                mapped_symbols_1 = self.partial_mapping_matrix[row].indices[symbols_mask_1] + 1
+            
+            iblt_sender_cells[row].add_multiple(mapped_symbols_1)
 
         return iblt_sender_cells
     
@@ -115,14 +150,10 @@ class IBLT:
         iblt_receiver_cells = self.encode()
         self.iblt_receiver_cells.extend(iblt_receiver_cells)
    
-        self.iblt_diff_cells, includes_pure_cells = self.calc_iblt_diff(self.iblt_sender_cells,
-                                                                        self.iblt_receiver_cells)
+        self.diff_cells = self.calc_iblt_diff(self.iblt_sender_cells,
+                                              self.iblt_receiver_cells)
                 
-        symmetric_difference = ["Decode Failure"]
-
-        # Early Failure to save time by wasted listing.
-        if includes_pure_cells:
-            symmetric_difference = self.listing(self.iblt_diff_cells)
+        symmetric_difference = self.listing(self.diff_cells)
         
         # Failure to decode.
         if symmetric_difference == ["Decode Failure"]:
@@ -145,21 +176,16 @@ class IBLT:
         Returns:
         - List[int]: IBLT cells of the symmetric difference.
         """
-        includes_pure_cells = False
-        iblt_diff_cells = [Cell() for _ in range(len(iblt_receiver_cells))]
+        diff_cells = [Cell(self.set_inside_set) for _ in range(len(iblt_receiver_cells))]
             
         for cell_idx in range(len(iblt_receiver_cells)):
-            iblt_diff_cells[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
-            iblt_diff_cells[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
-            iblt_diff_cells[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
+            diff_cells[cell_idx].counter = iblt_receiver_cells[cell_idx].counter - iblt_sender_cells[cell_idx].counter
+            diff_cells[cell_idx].sum =  iblt_receiver_cells[cell_idx].sum ^ iblt_sender_cells[cell_idx].sum
+            
+            if (self.set_inside_set == False):
+                diff_cells[cell_idx].checksum = iblt_receiver_cells[cell_idx].checksum ^ iblt_sender_cells[cell_idx].checksum
 
-            # For early failure and skipping listing procedure for
-            # current iteration.
-            if includes_pure_cells == False:
-                if iblt_diff_cells[cell_idx].is_pure_cell():
-                    includes_pure_cells = True
-
-        return iblt_diff_cells, includes_pure_cells
+        return diff_cells
     
     
     def listing(self, cells: List[Cell], with_deocde_frac: bool = False) -> List[int]:
@@ -178,7 +204,7 @@ class IBLT:
         symbols_cnt = None
 
         if with_deocde_frac:
-            symbols_cnt = sum([abs(c.counter) for c in cells])
+            symbols_cnt = sum(abs(c.counter) for c in cells)
 
             if symbols_cnt == 0:
                 return ["Decode Failure", 0]
@@ -201,7 +227,6 @@ class IBLT:
             
             symbols.append(symbol)
 
-            # mapped_rows = self.mapping_matrix[:, symbol-1].nonzero()[0]
             mapped_rows = self.mapping_matrix[:, symbol-1].nonzero()[0]
             
             for row in mapped_rows:
@@ -247,4 +272,3 @@ class IBLT:
         return all(cell.is_empty_cell() for cell in iblt_cells)
     
   
-

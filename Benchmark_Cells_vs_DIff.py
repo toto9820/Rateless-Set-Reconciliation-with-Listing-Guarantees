@@ -22,14 +22,20 @@ def run_trial_cells_vs_diff(trial_number: int,
                                                    set_inside_set)
     while True:
         p1_cells = p1_iblt.encode()
+        #p1_counters, p1_sums, p1_checksums = p1_iblt.encode()
 
+        # symmetric_difference = p2_iblt.decode(p1_counters, p1_sums, p1_checksums)
         symmetric_difference = p2_iblt.decode(p1_cells)
 
+        if symmetric_difference == ["Decode Failure"]:
+            continue
+
         if len(symmetric_difference) == symmetric_diff_size:
-            # print(f"Trial {trial_number}: Universe size 10^{int(math.log10(universe_size))}, Symmetric difference {symmetric_difference}, Cells transmitted {len(p2_iblt.iblt_diff_cells)}")
+            # print(f"Trial {trial_number}: Universe size 10^{int(math.log10(universe_size))}, Symmetric difference {symmetric_difference}, Cells transmitted {len(p2_iblt.diff_sums)}")
             break
     
-    iblt_diff_cells_size = len(p2_iblt.iblt_diff_cells)
+    # iblt_diff_cells_size = len(p2_iblt.diff_sums)
+    iblt_diff_cells_size = len(p2_iblt.diff_cells)
 
     # Clean up
     del p1_iblt
@@ -63,7 +69,7 @@ def benchmark_cells_vs_diff(universe_size: int,
             
         # for symmetric_diff_size in [10**i for i in 
         #                             range(0, symmetric_diff_trials+1)]:
-        for symmetric_diff_size in [1000]:
+        for symmetric_diff_size in [100]:
         
             total_cells_transmitted = 0
 
@@ -107,7 +113,7 @@ if __name__ == "__main__":
     elif system == 'Windows':
         trials_per_symmetric_diff = 10 
 
-    export_to_csv = True
+    export_to_csv = False
     set_inside_set = True
 
     # benchmark_cells_vs_diff(universe_size,

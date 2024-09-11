@@ -9,7 +9,7 @@ from sympy import nextprime
 from numba import jit
 
 class IBLTWithEGH(IBLT):
-    def __init__(self, symbols: List[int], n: int):
+    def __init__(self, symbols: List[int], n: int, set_inside_set: bool = True):
         """
         Initializes the Invertible Bloom Lookup Table with
         combinatorial method EGH.
@@ -17,8 +17,10 @@ class IBLTWithEGH(IBLT):
         Parameters:
         - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
+        - set_inside_set (bool) - flag indicating whether a superset assumption holds, i.e. one participant's set
+        includes the other.
         """
-        super().__init__(symbols, n)
+        super().__init__(symbols, n, set_inside_set)
         # Finite array of primes.
         self.primes = []
 

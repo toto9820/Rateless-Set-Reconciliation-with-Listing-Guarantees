@@ -4,11 +4,13 @@ from hashlib import sha256
 from xxhash import xxh32_intdigest, xxh64_intdigest, xxh3_64_intdigest, xxh64_hexdigest 
 
 class Cell:
-    def __init__(self, hash_func='xxh64'):
+    def __init__(self, set_inside_set: bool = True, hash_func='xxh64'):
         """
         Represents a cell of an IBLTWithEGH
 
         Parameters:
+        - set_inside_set (bool) : Specifiying if hash calculation is needed
+        due to superset assumption.
         - hash_func (str): Specifying the hash function to use ('xxh32', 'xxh64', or 'sha256').
         """
         # Represents the sum (xor of source symbols)
@@ -18,6 +20,8 @@ class Cell:
         # Represents the counter array - how many soruce symbols
         # are mapped to the cell.
         self.counter = 0
+
+        self.set_inside_set = set_inside_set
 
         # TODO - hash of transactions is in string and not int (they are the symbols) form - 
         # should enable to define options to symbols type - int, str, etc.
@@ -43,8 +47,9 @@ class Cell:
         self.sum ^= symbol
         self.counter += 1
 
-        # Perform XOR operation between the hash digests
-        self.checksum ^= self.hash_func(symbol)
+        if (self.set_inside_set == False):
+            # Perform XOR operation between the hash digests
+            self.checksum ^= self.hash_func(symbol)
 
     def add_multiple(self, symbols: list[int]) -> None:
         """
@@ -55,10 +60,11 @@ class Cell:
         
         self.counter += len(symbols)
         self.sum ^= np.bitwise_xor.reduce(symbols)
-         
-        hashes = self.vectorized_hash_func(list(symbols))
-        hashes_xor = np.bitwise_xor.reduce(hashes)
-        self.checksum ^= int(hashes_xor)
+
+        if (self.set_inside_set == False):
+            hashes = self.vectorized_hash_func(list(symbols))
+            hashes_xor = np.bitwise_xor.reduce(hashes)
+            self.checksum ^= int(hashes_xor)
 
     def remove(self, symbol: int) -> None:
         """
@@ -66,7 +72,8 @@ class Cell:
         """
         self.sum ^= symbol
 
-        self.checksum ^= self.hash_func(symbol)
+        if (self.set_inside_set == False):
+            self.checksum ^= self.hash_func(symbol)
         
         if self.counter > 0:
             self.counter -= 1
@@ -80,8 +87,10 @@ class Cell:
         if abs(self.counter) != 1 or self.sum == 0:
             return False
 
-        return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_func(self.sum))
-
+        if (self.set_inside_set == False):
+            return (self.counter == 1 or self.counter == -1) and (self.checksum == self.hash_func(self.sum))
+        else:
+            return (self.counter == 1 or self.counter == -1)
 
     def is_empty_cell(self) -> bool:
         """

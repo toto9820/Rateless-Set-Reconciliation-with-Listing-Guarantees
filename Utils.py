@@ -72,12 +72,12 @@ def generate_participants_iblts(universe_size, symmetric_difference_size, method
     }
 
     # Create sender and receiver IBLTs using the selected method.
-    p1_iblt = iblt_classes[method](p1_list, len(universe_list))
-    p2_iblt = iblt_classes[method](p2_list, len(universe_list))
+    p1_iblt = iblt_classes[method](p1_list, len(universe_list), set_inside_set)
+    p2_iblt = iblt_classes[method](p2_list, len(universe_list), set_inside_set)
 
     # For debugging: store particpant 1's list in 
     # participant 2's IBLT object.
-    p2_iblt.other_list_for_debug = p1_iblt
+    p2_iblt.other_list_for_debug = p1_iblt.symbols
 
     del p1_list
     del p2_list

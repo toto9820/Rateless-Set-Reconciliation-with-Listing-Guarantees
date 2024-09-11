@@ -31,7 +31,7 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
 
     # Iterate over universe sizes
     # for universe_size in [10**i for i in range(2, 8)]:
-    for universe_size in [10**i for i in range(1, 2)]:
+    for universe_size in [10**i for i in range(6, 7)]:
         total_cells_transmitted = 0
 
         for trial in range(1, num_trials+1):
@@ -57,8 +57,8 @@ def benchmark_universe_vs_cells_serial(symmetric_difference_size: int,
                 if symmetric_difference:
                     break
 
-            total_cells_transmitted += len(p2_iblt.iblt_diff_cells)
-            print(f"Symmetric difference in trial {trial}: {symmetric_difference}")
+            total_cells_transmitted += len(p2_iblt.diff_cells)
+            # print(f"Symmetric difference in trial {trial}: {symmetric_difference}")
 
         # Optimize memory usage by deleting large temporary objects
         del universe_list
@@ -195,7 +195,7 @@ if __name__ == "__main__":
     # symmetric_difference_size is parameter d.
 
     # for symmetric_difference_size in [1, 3, 10, 20]:
-    for symmetric_difference_size in [50]:
+    for symmetric_difference_size in [150]:
 
         # benchmark_universe_vs_cells_parallel(symmetric_difference_size, 
         #                                     Method.EGH,

@@ -6,7 +6,7 @@ from itertools import combinations, product
 from scipy.sparse import csr_matrix, vstack
 
 class IBLTWithExtendedHamming(IBLT):
-    def __init__(self, symbols: List[int], n: int):
+    def __init__(self, symbols: List[int], n: int, set_inside_set: bool = True):
         """
         Initializes the Invertible Bloom Lookup Table with
         binary covering array method.
@@ -14,6 +14,8 @@ class IBLTWithExtendedHamming(IBLT):
         Parameters:
         - symbols (List[int]): set of source symbols.
         - n (int) - universe size.
+        - set_inside_set (bool) - flag indicating whether a superset assumption holds, i.e. one participant's set
+        includes the other.
         """
         super().__init__(symbols, n)
 
