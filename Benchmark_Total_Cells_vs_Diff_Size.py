@@ -5,10 +5,9 @@ import multiprocessing
 from Utils import * 
 from functools import partial
 
-
-def run_trial_cells_vs_diff(trial_number: int,
+def run_trial_total_cells_vs_diff_size(trial_number: int,
                             universe_size: int,
-                            symmetric_diff_size: int,
+                            symmetric_difference_size: int,
                             method: Method,
                             set_inside_set: bool = True):
     
@@ -16,26 +15,24 @@ def run_trial_cells_vs_diff(trial_number: int,
     Run a trial for specific method and symmetric difference size.
     """
 
+    method_str = str(method).lower().replace('method.', '')
+
+
     p1_iblt, p2_iblt = generate_participants_iblts(universe_size,
-                                                   symmetric_diff_size,
+                                                   symmetric_difference_size,
                                                    method,
                                                    set_inside_set)
     while True:
-        p1_cells = p1_iblt.encode()
-        #p1_counters, p1_sums, p1_checksums = p1_iblt.encode()
+        p1_counters, p1_sums, p1_checksums = p1_iblt.encode()
 
-        # symmetric_difference = p2_iblt.decode(p1_counters, p1_sums, p1_checksums)
-        symmetric_difference = p2_iblt.decode(p1_cells)
+        symmetric_difference = p2_iblt.decode(p1_counters, p1_sums, p1_checksums)
+        
+        print(F"Trial {trial_number} for method {method_str}, Symmetric Difference Tested Size {symmetric_difference_size}, Symmetric Difference len: {len(symmetric_difference)} with {len(p2_iblt.diff_counters)} cells")
 
-        if symmetric_difference == ["Decode Failure"]:
-            continue
-
-        if len(symmetric_difference) == symmetric_diff_size:
-            # print(f"Trial {trial_number}: Universe size 10^{int(math.log10(universe_size))}, Symmetric difference {symmetric_difference}, Cells transmitted {len(p2_iblt.diff_sums)}")
+        if len(symmetric_difference) == symmetric_difference_size:
             break
     
-    # iblt_diff_cells_size = len(p2_iblt.diff_sums)
-    iblt_diff_cells_size = len(p2_iblt.diff_cells)
+    iblt_diff_cells_size = len(p2_iblt.diff_counters)
 
     # Clean up
     del p1_iblt
@@ -44,8 +41,8 @@ def run_trial_cells_vs_diff(trial_number: int,
 
     return iblt_diff_cells_size
 
-def benchmark_cells_vs_diff(universe_size: int,
-                            symmetric_diff_trials: int,
+def benchmark_total_cells_vs_diff_size(universe_size: int,
+                            symmetric_difference_size: int,
                             trials_per_symmetric_diff: int,
                             export_to_csv: bool = True,
                             set_inside_set: bool = True):
@@ -66,22 +63,24 @@ def benchmark_cells_vs_diff(universe_size: int,
     
     for method in methods:
         results = []
+
+        if method == Method.EXTENDED_HAMMING:
+            symmetric_difference_sizes = [1,2,3]
+        else:
+            symmetric_difference_sizes = [10**i for i in range(0, symmetric_diff_trials)]
             
-        # for symmetric_diff_size in [10**i for i in 
-        #                             range(0, symmetric_diff_trials+1)]:
-        for symmetric_diff_size in [100]:
+        for symmetric_difference_size in symmetric_difference_sizes:
         
             total_cells_transmitted = 0
 
             # Create a partial function with fixed arguments
-            partial_run_trial = partial(run_trial_cells_vs_diff, 
+            partial_run_trial = partial(run_trial_total_cells_vs_diff_size, 
                                         universe_size=universe_size,
-                                        symmetric_diff_size=symmetric_diff_size, 
+                                        symmetric_difference_size=symmetric_difference_size, 
                                         method=method, 
                                         set_inside_set=set_inside_set)
             
-            processes_num = int(multiprocessing.cpu_count() * 0.75)
-            # processes_num = 1
+            processes_num = int(multiprocessing.cpu_count() * 0.25)
 
             # Use Pool to run trials in parallel
             with get_pool(processes_num) as pool:
@@ -92,38 +91,44 @@ def benchmark_cells_vs_diff(universe_size: int,
 
             avg_total_cells_transmitted = math.ceil(total_cells_transmitted / trials_per_symmetric_diff)
             print("###############################################################################")
-            print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f} for |∆|={symmetric_diff_size}")
+            print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f} for |∆|={symmetric_difference_size}")
             print("###############################################################################")
-            results.append((symmetric_diff_size, avg_total_cells_transmitted))
+            results.append((symmetric_difference_size, avg_total_cells_transmitted))
 
         if export_to_csv:
-            csv_filename = f"{str(method).lower().replace('method.', '')}_results/{str(method).lower().replace('method.', '')}_cells_vs_diff.csv"
-            export_results_to_csv(["Symmetric Diff Size", "Cells Transmitted"],
+            if set_inside_set:
+                csv_filename = f"total_cells_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_diff_size_set_inside_set.csv"
+            else:
+                csv_filename = f"total_cells_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_diff_size_set_not_inside_set.csv"
+        
+            export_results_to_csv(["Symmetric Diff Size", "Total Cells Transmitted"],
                                 results, csv_filename)
 
 if __name__ == "__main__":
     universe_size = 10**6
-    symmetric_diff_trials = int(math.log10(universe_size)) 
+    symmetric_diff_trials = 4
 
     # Check the system platform (OS type)
     system = platform.system()
 
     if system == 'Linux':
-        trials_per_symmetric_diff = 100 
+        trials_per_symmetric_diff = 100
+        # trials_per_symmetric_diff = 5
+
     elif system == 'Windows':
         trials_per_symmetric_diff = 10 
 
-    export_to_csv = False
+    export_to_csv = True
     set_inside_set = True
 
-    # benchmark_cells_vs_diff(universe_size,
-    #                         symmetric_diff_trials,
-    #                         trials_per_symmetric_diff,
-    #                         export_to_csv,
-    #                         set_inside_set)
-
-    profile_function(benchmark_cells_vs_diff, universe_size,
+    benchmark_total_cells_vs_diff_size(universe_size,
                             symmetric_diff_trials,
                             trials_per_symmetric_diff,
                             export_to_csv,
                             set_inside_set)
+
+    # profile_function(benchmark_total_cells_vs_diff_size, universe_size,
+    #                         symmetric_diff_trials,
+    #                         trials_per_symmetric_diff,
+    #                         export_to_csv,
+    #                         set_inside_set)

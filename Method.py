@@ -8,4 +8,4 @@ class Method(Enum):
     EGH = 1
     OLS = 2,
     ID = 3,
-    EXTENDED_HAMMING_CODE = 4
+    EXTENDED_HAMMING = 4

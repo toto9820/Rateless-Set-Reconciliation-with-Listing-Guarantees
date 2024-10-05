@@ -2,5 +2,6 @@
     "git.ignoreLimitWarning": true,
     "python.analysis.extraPaths": [
         "./Utils"
-    ]
+    ],
+    "terminal.integrated.fontSize": 16
 }
