@@ -93,7 +93,7 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 // symmetric difference sizes.
 func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 	// This is the maximum symmetric difference size to test
-	maxSymmetricDiffSize := 100000
+	maxSymmetricDiffSize := 10000
 	// maxSymmetricDiffSize := 1000
 
 	// Generate symmetric difference sizes as powers of 10 up to the maximum
