@@ -95,7 +95,8 @@ def calc_decode_success_rate(symmetric_difference_size: int,
     for idx in range(max_cells):
         if count_results[idx] > 0:
             avg_success_rate = aggregated_results[idx] / num_trials
-            avg_success_rates.append((count_results[idx], avg_success_rate))
+            avg_total_bits_transmitted = count_results[idx] * cellSizeInBits
+            avg_success_rates.append((avg_total_bits_transmitted, avg_success_rate))
 
     return avg_success_rates 
 
@@ -142,7 +143,7 @@ def benchmark_success_rates_vs_total_bits(universe_size,
                     color=colors[idx % len(colors)],      
                     label=f'|∆|={symmetric_difference_size}')
 
-            plt.xlabel('Number of IBLT cells')
+            plt.xlabel('Number of IBLT cells (in bits)')
             plt.ylabel('Success Probability')
             plt.title(f'Success Probability vs. Number of cells for {method}')
             plt.legend()
