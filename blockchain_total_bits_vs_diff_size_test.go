@@ -8,8 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
@@ -79,12 +78,12 @@ func BenchmarkBlockChainTotalCellsVsDiffSize(b *testing.B) {
 	// rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Connect to Ethereum clients using IPC
-	node1, err := ethclient.Dial("/data/data_Tomer/node1/geth.ipc") // Using IPC connection for Node 1
+	node1, err := rpc.Dial("/data/data_Tomer/node1/geth.ipc") // Using IPC connection for Node 1
 	if err != nil {
 		log.Fatalf("Failed to connect to Node 1 Ethereum client: %v", err)
 	}
 
-	// node2, err := ethclient.Dial("/data/data_Tomer/node2/geth.ipc") // Using IPC connection for Node 2
+	// node2, err := rpc.Dial("/data/data_Tomer/node2/geth.ipc") // Using IPC connection for Node 2
 	// if err != nil {
 	// 	log.Fatalf("Failed to connect to Node 2 Ethereum client: %v", err)
 	// }
@@ -107,13 +106,14 @@ func BenchmarkBlockChainTotalCellsVsDiffSize(b *testing.B) {
 	// numTrials := 100
 	// numTrials := 10
 
-	// Fetch pending transactions from the transaction pool
-	var pendingTxs []common.Hash
+	// Get transaction pool content for node 1
+	var txpool1Data map[string]interface{}
 
-	err = node1.Client().CallContext(context.Background(), &pendingTxs, "eth_pendingTransactions")
+	ctx := context.Background()
 
+	err = node1.CallContext(ctx, &txpool1Data, "txpool_content")
 	if err != nil {
-		log.Fatalf("Failed to get pending transactions: %v", err)
+		log.Fatalf("Failed to fetch txpool content for Node 1: %v", err)
 	}
 
 	// universeSize := int(math.Pow(10, 2))

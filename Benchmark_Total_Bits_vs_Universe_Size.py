@@ -4,6 +4,10 @@ from functools import partial
 from typing import List
 from Utils import *
 
+# Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+# Each field is 64 bit.
+cellSizeInBits = 64 * 3
+
 def run_trial_total_cells_vs_universe_size(trial_number: int, 
                                       universe_size: int, 
                                       symmetric_difference_size: int, 
@@ -53,7 +57,7 @@ def run_trial_total_cells_vs_universe_size(trial_number: int,
 
     return iblt_diff_cells_size
 
-def benchmark_total_cells_vs_universe_size(universe_size: int,
+def benchmark_total_bits_vs_universe_size(universe_size: int,
                                          universe_trials: int, 
                                          trials_per_universe_size: int,
                                          export_to_csv: bool = True, 
@@ -109,15 +113,16 @@ def benchmark_total_cells_vs_universe_size(universe_size: int,
                 print("###############################################################################")
                 print(f"Avg. number of cells transmitted for method {method_str}: {avg_total_cells_transmitted:.2f}")
                 print("###############################################################################")
-                results.append((universe_size, avg_total_cells_transmitted))
+                avg_total_bits_transmitted = avg_total_cells_transmitted * cellSizeInBits
+                results.append((universe_size, avg_total_bits_transmitted))
 
             if export_to_csv:
                 if set_inside_set:
-                    csv_filename = f"total_cells_vs_universe_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_universe_size_for_diff_size_{symmetric_difference_size}_set_inside_set.csv"
+                    csv_filename = f"total_bits_vs_universe_size_benchmark/{str(method).lower().replace('method.', '')}_total_bits_vs_universe_size_for_diff_size_{symmetric_difference_size}_set_inside_set.csv"
                 else:
-                    csv_filename = f"total_cells_vs_universe_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_universe_size_for_diff_size_{symmetric_difference_size}_set_not_inside_set.csv"
+                    csv_filename = f"total_bits_vs_universe_size_benchmark/{str(method).lower().replace('method.', '')}_total_bits_vs_universe_size_for_diff_size_{symmetric_difference_size}_set_not_inside_set.csv"
                     
-                export_results_to_csv(["Universe Size", "Total Cells Transmitted"],
+                export_results_to_csv(["Universe Size", "Total Bits Transmitted"],
                                     results, csv_filename)
         
 if __name__ == "__main__":
@@ -136,14 +141,14 @@ if __name__ == "__main__":
     export_to_csv = True
     set_inside_set = True
 
-    benchmark_total_cells_vs_universe_size(universe_size,
+    benchmark_total_bits_vs_universe_size(universe_size,
                             universe_trials,
                             trials_per_universe_size,
                             export_to_csv=export_to_csv,
                             set_inside_set=set_inside_set)
     
 
-    # profile_function(benchmark_total_cells_vs_universe_size, universe_size,
+    # profile_function(benchmark_total_bits_vs_universe_size, universe_size,
     #                         universe_trials,
     #                         trials_per_universe_size,
     #                         export_to_csv=export_to_csv,

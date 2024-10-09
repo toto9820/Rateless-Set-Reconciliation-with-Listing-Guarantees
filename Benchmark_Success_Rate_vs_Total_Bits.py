@@ -4,6 +4,10 @@ from Utils import *
 import multiprocessing
 from functools import partial
 
+# Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+# Each field is 64 bit.
+cellSizeInBits = 64 * 3
+
 def run_trial_success_rate(trial_number: int,
                            symmetric_difference_size: int, 
                            universe_size: int, 
@@ -95,7 +99,7 @@ def calc_decode_success_rate(symmetric_difference_size: int,
 
     return avg_success_rates 
 
-def benchmark_success_rates_vs_total_cells(universe_size, 
+def benchmark_success_rates_vs_total_bits(universe_size, 
                       symmetric_difference_sizes, 
                       num_trials=1000,
                       export_to_csv: bool = False, 
@@ -124,11 +128,11 @@ def benchmark_success_rates_vs_total_cells(universe_size,
             
             if export_to_csv:
                 if set_inside_set:
-                    csv_filename = f"success_rate_vs_total_cells_benchmark/{str(method).lower().replace('method.', '')}_success_rate_vs_total_cells_diff_size_{symmetric_difference_size}_set_inside_set.csv"
+                    csv_filename = f"success_rate_vs_total_bits_benchmark/{str(method).lower().replace('method.', '')}_success_rate_vs_total_bits_diff_size_{symmetric_difference_size}_set_inside_set.csv"
                 else:
-                    csv_filename = f"success_rate_vs_total_cells_benchmark/{str(method).lower().replace('method.', '')}_success_rate_vs_total_cells_diff_size_{symmetric_difference_size}_set_not_inside_set.csv"
+                    csv_filename = f"success_rate_vs_total_bits_benchmark/{str(method).lower().replace('method.', '')}_success_rate_vs_total_bits_diff_size_{symmetric_difference_size}_set_not_inside_set.csv"
                 
-                export_results_to_csv(["Total Cells Transmitted", "Success Probability"],
+                export_results_to_csv(["Total Bits Transmitted", "Success Probability"],
                                     results, csv_filename)
 
             # Plot the results with different markers and colors
@@ -147,7 +151,7 @@ def benchmark_success_rates_vs_total_cells(universe_size,
 
             if system == 'Linux':
                 # Save the plot to a file
-                plt.savefig(f'./data/success_rate_vs_total_cells_benchmark/{str(method).lower().replace('method.', '')}_success_rate_plot')
+                plt.savefig(f'./data/success_rate_vs_total_bits_benchmark/{str(method).lower().replace('method.', '')}_success_rate_plot')
             
             elif system == 'Windows':
                 # Not working on remote server.
@@ -172,7 +176,7 @@ if __name__ == "__main__":
     export_to_csv = True
     set_inside_set = True
 
-    benchmark_success_rates_vs_total_cells(universe_size=universe_size, 
+    benchmark_success_rates_vs_total_bits(universe_size=universe_size, 
                       symmetric_difference_sizes=[1,3,30,100,300,1000], 
                       num_trials=trials, 
                       export_to_csv=export_to_csv, 

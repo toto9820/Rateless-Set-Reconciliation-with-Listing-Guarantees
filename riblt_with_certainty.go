@@ -25,16 +25,18 @@ type IBFCell struct {
 }
 
 type InvertibleBloomFilter struct {
-	Cells     []IBFCell
-	Iteration uint64
-	Size      uint64
+	Cells      []IBFCell
+	Iteration  uint64
+	PrimesUsed uint64
+	Size       uint64
 }
 
 func NewIBF(size uint64) *InvertibleBloomFilter {
 	return &InvertibleBloomFilter{
-		Cells:     make([]IBFCell, size),
-		Iteration: 0,
-		Size:      0,
+		Cells:      make([]IBFCell, size),
+		Iteration:  0,
+		PrimesUsed: 0,
+		Size:       0,
 	}
 }
 
@@ -47,6 +49,7 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 
 	// Copy primitive types directly
 	ibf.Iteration = ibf2.Iteration
+	ibf.PrimesUsed = ibf2.PrimesUsed
 	ibf.Size = ibf2.Size
 }
 
@@ -78,16 +81,34 @@ func (c *IBFCell) IsZero() bool {
 
 // For now - just egh implementing to check if really faster.
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []uint64) {
-	// Get the next prime based on the current iteration
-	curPrime := primes[ibf.Iteration]
+	startPrimesIdx := 0
+	endPrimesIdx := 0
+
+	if ibf.PrimesUsed == 0 {
+		startPrimesIdx = 0
+		endPrimesIdx = 1
+		ibf.PrimesUsed = 1
+	} else {
+		startPrimesIdx = int(ibf.PrimesUsed)
+		endPrimesIdx = int(ibf.PrimesUsed + ibf.Iteration)
+		ibf.PrimesUsed = ibf.PrimesUsed + ibf.Iteration
+	}
+
+	curPrimes := primes[startPrimesIdx:endPrimesIdx]
+
+	curPrimesSum := uint64(0)
+
+	for i := uint64(0); i < uint64(len(curPrimes)); i++ {
+		curPrimesSum = curPrimesSum + curPrimes[i]
+	}
 
 	// Ensure enough capacity for new cells
-	if ibf.Size+curPrime > uint64(len(ibf.Cells)) {
+	if ibf.Size+curPrimesSum > uint64(len(ibf.Cells)) {
 		// Doubling the capacity instead of a fixed increase
 		newCapacity := len(ibf.Cells) * 2
 
-		if newCapacity < int(ibf.Size+curPrime) {
-			newCapacity = int(ibf.Size + curPrime)
+		if newCapacity < int(ibf.Size+curPrimesSum) {
+			newCapacity = int(ibf.Size + curPrimesSum)
 		}
 
 		newCells := make([]IBFCell, newCapacity)
@@ -95,14 +116,16 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []uint64) {
 		ibf.Cells = newCells
 	}
 
-	// Add symbols to the IBF cells
-	for _, s := range symbols {
-		j := ibf.Size + s%curPrime
-		ibf.Cells[j].Insert(s)
-	}
+	for _, curPrime := range curPrimes {
+		// Add symbols to the IBF cells
+		for _, s := range symbols {
+			j := ibf.Size + s%curPrime
+			ibf.Cells[j].Insert(s)
+		}
 
-	// Update the size of the filter
-	ibf.Size += curPrime
+		// Update the size of the filter
+		ibf.Size += curPrime
+	}
 
 	// Increment the iteration count
 	ibf.Iteration++
@@ -158,7 +181,7 @@ func (ibf *InvertibleBloomFilter) Decode() (aWithoutB []uint64, bWithoutA []uint
 
 		primesSum := uint64(0)
 
-		for _, prime := range primes[:ibf.Iteration] {
+		for _, prime := range primes[:ibf.PrimesUsed] {
 			cellIdx := primesSum + xorSum%prime
 			ibf.Cells[cellIdx].Count -= count
 			ibf.Cells[cellIdx].XorSum ^= xorSum

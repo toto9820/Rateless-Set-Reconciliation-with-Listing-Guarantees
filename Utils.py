@@ -18,11 +18,9 @@ from IBLTWithExtendedHamming import IBLTWithExtendedHamming
 # method (Method): The method to use for creating IBLTs.
 # methods = [Method.EGH, 
 #            Method.OLS, 
-#            Method.ID, 
 #            Method.EXTENDED_HAMMING_CODE]
 
-methods = [Method.EGH,
-           Method.OLS,
+methods = [Method.OLS,
            Method.EXTENDED_HAMMING]
 
 # Global universe list shared between pool of processes to save memory.

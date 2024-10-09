@@ -91,9 +91,9 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 // BenchmarkReconciliation benchmarks the reconciliation
 // process with a fixed universe size and different
 // symmetric difference sizes.
-func BenchmarkAdditionalCellsVsDiffSize(b *testing.B) {
+func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 	// This is the maximum symmetric difference size to test
-	maxSymmetricDiffSize := 10000
+	maxSymmetricDiffSize := 100000
 	// maxSymmetricDiffSize := 1000
 
 	// Generate symmetric difference sizes as powers of 10 up to the maximum
@@ -103,7 +103,7 @@ func BenchmarkAdditionalCellsVsDiffSize(b *testing.B) {
 	}
 
 	// Prepare a CSV file to store the results.
-	file, err := os.Create("egh_additional_cells_vs_diff_size_set_inside_set.csv")
+	file, err := os.Create("egh_additional_bits_vs_diff_size_set_inside_set.csv")
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return
@@ -114,7 +114,7 @@ func BenchmarkAdditionalCellsVsDiffSize(b *testing.B) {
 	defer writer.Flush()
 
 	// Write the header row to the CSV file.
-	writer.Write([]string{"Symmetric Diff Size", "Additional Cells Transmitted"})
+	writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
 
 	// Set the number of trials
 	numTrials := 10
@@ -122,6 +122,10 @@ func BenchmarkAdditionalCellsVsDiffSize(b *testing.B) {
 
 	// Set a global seed
 	globalSeed := time.Now().UnixNano()
+
+	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+	// Each field is 64 bit.
+	cellSizeInBits := 64 * 3
 
 	// Define the universe size
 	// universeSize := int(math.Pow(10, 2))
@@ -160,7 +164,7 @@ func BenchmarkAdditionalCellsVsDiffSize(b *testing.B) {
 		// Write the result to the CSV file.
 		writer.Write([]string{
 			fmt.Sprintf("%d", symmetricDiffSizes[idx]),
-			fmt.Sprintf("%d", avgAdditionalCells),
+			fmt.Sprintf("%d", avgAdditionalCells*cellSizeInBits),
 		})
 	}
 }

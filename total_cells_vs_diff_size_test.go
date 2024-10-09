@@ -95,8 +95,12 @@ func BenchmarkTotalCellsVsDiffSize(b *testing.B) {
 	// Create a local random number generator with a time-based seed
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+	// Each field is 64 bit.
+	cellSizeInBits := 64 * 3
+
 	// Prepare a CSV file to store the results.
-	file, err := os.Create("egh_total_cells_vs_diff_size_set_inside_set.csv")
+	file, err := os.Create("egh_total_bits_vs_diff_size_set_inside_set.csv")
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return
@@ -107,14 +111,14 @@ func BenchmarkTotalCellsVsDiffSize(b *testing.B) {
 	defer writer.Flush()
 
 	// Write the header row to the CSV file.
-	writer.Write([]string{"Symmetric Diff Size", "Total Cells Transmitted"})
+	writer.Write([]string{"Symmetric Diff Size", "Total Bits Transmitted"})
+
+	// universeSize := int(math.Pow(10, 4))
+	universeSize := int(math.Pow(10, 6))
 
 	// Set the number of trials
 	// numTrials := 100
 	numTrials := 10
-
-	// universeSize := int(math.Pow(10, 2))
-	universeSize := int(math.Pow(10, 6))
 
 	for _, bench := range benches {
 		var totalCellsTransmitted uint64
@@ -131,7 +135,7 @@ func BenchmarkTotalCellsVsDiffSize(b *testing.B) {
 		// Write the result to the CSV file.
 		writer.Write([]string{
 			fmt.Sprintf("%d", bench.symmetricDiffSize),
-			fmt.Sprintf("%d", averageCellsTransmitted),
+			fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
 		})
 	}
 }

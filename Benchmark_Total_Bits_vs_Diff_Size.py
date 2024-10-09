@@ -5,6 +5,10 @@ import multiprocessing
 from Utils import * 
 from functools import partial
 
+# Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+# Each field is 64 bit.
+cellSizeInBits = 64 * 3
+
 def run_trial_total_cells_vs_diff_size(trial_number: int,
                             universe_size: int,
                             symmetric_difference_size: int,
@@ -41,14 +45,14 @@ def run_trial_total_cells_vs_diff_size(trial_number: int,
 
     return iblt_diff_cells_size
 
-def benchmark_total_cells_vs_diff_size(universe_size: int,
+def benchmark_total_bits_vs_diff_size(universe_size: int,
                             symmetric_difference_size: int,
                             trials_per_symmetric_diff: int,
                             export_to_csv: bool = True,
                             set_inside_set: bool = True):
     
     """
-    Benchmark the memory required (IBLT cells) based on symmetric 
+    Benchmark the memory required (IBLT cells in bits) based on symmetric 
     difference size.
 
     Parameters:
@@ -93,15 +97,16 @@ def benchmark_total_cells_vs_diff_size(universe_size: int,
             print("###############################################################################")
             print(f"Avg. number of cells transmitted: {avg_total_cells_transmitted:.2f} for |∆|={symmetric_difference_size}")
             print("###############################################################################")
-            results.append((symmetric_difference_size, avg_total_cells_transmitted))
+            avg_total_bits_transmitted = avg_total_cells_transmitted * cellSizeInBits
+            results.append((symmetric_difference_size, avg_total_bits_transmitted))
 
         if export_to_csv:
             if set_inside_set:
-                csv_filename = f"total_cells_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_diff_size_set_inside_set.csv"
+                csv_filename = f"total_bits_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_bits_vs_diff_size_set_inside_set.csv"
             else:
-                csv_filename = f"total_cells_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_cells_vs_diff_size_set_not_inside_set.csv"
+                csv_filename = f"total_bits_vs_diff_size_benchmark/{str(method).lower().replace('method.', '')}_total_bits_vs_diff_size_set_not_inside_set.csv"
         
-            export_results_to_csv(["Symmetric Diff Size", "Total Cells Transmitted"],
+            export_results_to_csv(["Symmetric Diff Size", "Total Bits Transmitted"],
                                 results, csv_filename)
 
 if __name__ == "__main__":
@@ -121,13 +126,13 @@ if __name__ == "__main__":
     export_to_csv = True
     set_inside_set = True
 
-    benchmark_total_cells_vs_diff_size(universe_size,
+    benchmark_total_bits_vs_diff_size(universe_size,
                             symmetric_diff_trials,
                             trials_per_symmetric_diff,
                             export_to_csv,
                             set_inside_set)
 
-    # profile_function(benchmark_total_cells_vs_diff_size, universe_size,
+    # profile_function(benchmark_total_bits_vs_diff_size, universe_size,
     #                         symmetric_diff_trials,
     #                         trials_per_symmetric_diff,
     #                         export_to_csv,
