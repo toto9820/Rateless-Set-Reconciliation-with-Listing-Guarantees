@@ -98,12 +98,16 @@ func BenchmarkSuccessRateVsTotalCells(b *testing.B) {
 	// Create a local random number generator with a time-based seed
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
+	// Each field is 64 bit.
+	cellSizeInBits := 64 * 3
+
 	// Set the number of trials
 	numTrials := 10
 
 	for _, symmetricDiffSize := range symmetricDiffSizes {
 		// Prepare a CSV file to store the results for the current symmetric difference size.
-		file, err := os.Create(fmt.Sprintf("egh_success_rate_vs_total_cells_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
+		file, err := os.Create(fmt.Sprintf("egh_success_rate_vs_total_bits_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
 		if err != nil {
 			fmt.Println("Error creating file:", err)
 			return
@@ -114,7 +118,7 @@ func BenchmarkSuccessRateVsTotalCells(b *testing.B) {
 		defer writer.Flush()
 
 		// Write the header row to the CSV file.
-		writer.Write([]string{"Total Cells Transmitted", "Success Probability"})
+		writer.Write([]string{"Total Bits Transmitted", "Success Probability"})
 
 		// Initialize to store all trials' results
 		allResults := [][]Result{}
@@ -164,7 +168,7 @@ func BenchmarkSuccessRateVsTotalCells(b *testing.B) {
 		// Write the averaged results to the CSV file
 		for _, avgResult := range avgResults {
 			writer.Write([]string{
-				fmt.Sprintf("%d", avgResult.TotalCells), // Adding 1 because the index starts from 0
+				fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits), // Adding 1 because the index starts from 0
 				fmt.Sprintf("%.4f", avgResult.SuccessRate),
 			})
 		}
