@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package riblt_with_certainty_test
 
 import (
 	"encoding/csv"
@@ -8,8 +8,11 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
+
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
@@ -40,8 +43,8 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 
 	intialCells := uint64(1000)
 
-	ibfAlice := NewIBF(intialCells, "uint64")
-	ibfBob := NewIBF(intialCells, "uint64")
+	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
+	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
 	cost := uint64(0)
 
 	for {
@@ -85,25 +88,14 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		{10000},
 	}
 
-	// benches := []struct {
-	// 	symmetricDiffSize int
-	// }{
-	// 	// {1},
-	// 	{10},
-	// }
-
-	// Create a local random number generator with a time-based seed
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
-	// Each field is 64 bit.
 	cellSizeInBits := 64 * 3
+	universeSize := int(math.Pow(10, 6))
+	numTrials := 10
 
 	// Prepare a CSV file to store the results.
 	file, err := os.Create("egh_total_bits_vs_diff_size_set_inside_set.csv")
 	if err != nil {
-		fmt.Println("Error creating file:", err)
-		return
+		b.Fatalf("Error creating file: %v", err)
 	}
 	defer file.Close()
 
@@ -113,29 +105,45 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 	// Write the header row to the CSV file.
 	writer.Write([]string{"Symmetric Diff Size", "Total Bits Transmitted"})
 
-	// universeSize := int(math.Pow(10, 4))
-	universeSize := int(math.Pow(10, 6))
-
-	// Set the number of trials
-	// numTrials := 100
-	numTrials := 10
-
 	for _, bench := range benches {
-		var totalCellsTransmitted uint64
 		b.Run(fmt.Sprintf("Universe=%d, Diff=%d", universeSize, bench.symmetricDiffSize), func(b *testing.B) {
-			totalCellsTransmitted = 0
+			results := make(chan uint64, numTrials)
+			var totalCellsTransmitted uint64
+
+			// Create a wait group to synchronize goroutines
+			var wg sync.WaitGroup
+			wg.Add(numTrials)
+
+			// Run trials concurrently
 			for i := 0; i < numTrials; i++ {
-				totalCellsTransmitted += runTrialTotalCellsVsDiffSize(i+1, universeSize, bench.symmetricDiffSize, rng)
+				go func(trialNum int) {
+					defer wg.Done()
+					// Create a local random number generator with a time-based seed
+					rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(trialNum)))
+					result := runTrialTotalCellsVsDiffSize(trialNum+1, universeSize, bench.symmetricDiffSize, rng)
+					results <- result
+				}(i)
 			}
-		})
 
-		averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
-		averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+			// Close the results channel when all goroutines are done
+			go func() {
+				wg.Wait()
+				close(results)
+			}()
 
-		// Write the result to the CSV file.
-		writer.Write([]string{
-			fmt.Sprintf("%d", bench.symmetricDiffSize),
-			fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+			// Collect results
+			for result := range results {
+				totalCellsTransmitted += result
+			}
+
+			averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
+			averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+
+			// Write the result to the CSV file.
+			writer.Write([]string{
+				fmt.Sprintf("%d", bench.symmetricDiffSize),
+				fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+			})
 		})
 	}
 }

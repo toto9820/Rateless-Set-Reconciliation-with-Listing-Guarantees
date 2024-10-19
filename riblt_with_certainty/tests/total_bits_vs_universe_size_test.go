@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package riblt_with_certainty_test
 
 import (
 	"encoding/csv"
@@ -8,8 +8,11 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
+
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
@@ -40,8 +43,8 @@ func runTrialTotalCellsVsUniverseSize(trialNumber int,
 
 	intialCells := uint64(1000)
 
-	ibfAlice := NewIBF(intialCells, "uint64")
-	ibfBob := NewIBF(intialCells, "uint64")
+	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
+	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
 	cost := uint64(0)
 
 	for {
@@ -74,11 +77,7 @@ func runTrialTotalCellsVsUniverseSize(trialNumber int,
 // BenchmarkTotalBitsVsUniverseSize benchmarks the reconciliation
 // process with fixed symmetric difference sizes and varying universe sizes.
 func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
-	// Define the symmetric difference sizes to test
 	symmetricDiffSizes := []int{1, 3, 30, 90}
-	// symmetricDiffSizes := []int{90}
-
-	// Define the universe sizes to test
 	universeSizes := []int{
 		int(math.Pow(10, 3)), // 1,000
 		int(math.Pow(10, 4)), // 10,000
@@ -87,19 +86,14 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 		int(math.Pow(10, 7)), // 10,000,000
 	}
 
-	// Create a local random number generator with a time-based seed
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
-	// Each field is 64 bit.
 	cellSizeInBits := 64 * 3
+	numTrials := 10
 
 	for _, symmetricDiffSize := range symmetricDiffSizes {
 		// Prepare a CSV file to store the results for the current symmetric difference size.
 		file, err := os.Create(fmt.Sprintf("egh_total_bits_vs_universe_size_for_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
 		if err != nil {
-			fmt.Println("Error creating file:", err)
-			return
+			b.Fatalf("Error creating file: %v", err)
 		}
 		defer file.Close()
 
@@ -109,25 +103,45 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 		// Write the header row to the CSV file.
 		writer.Write([]string{"Universe Size", "Total Bits Transmitted"})
 
-		// Set the number of trials
-		numTrials := 10
-
 		for _, universeSize := range universeSizes {
-			var totalCellsTransmitted uint64
 			b.Run(fmt.Sprintf("DiffSize=%d, Universe=%d", symmetricDiffSize, universeSize), func(b *testing.B) {
-				totalCellsTransmitted = 0
+				results := make(chan uint64, numTrials)
+				var totalCellsTransmitted uint64
+
+				// Create a wait group to synchronize goroutines
+				var wg sync.WaitGroup
+				wg.Add(numTrials)
+
+				// Run trials concurrently
 				for i := 0; i < numTrials; i++ {
-					totalCellsTransmitted += runTrialTotalCellsVsUniverseSize(i+1, universeSize, symmetricDiffSize, rng)
+					go func(trialNum int) {
+						defer wg.Done()
+						// Create a local random number generator with a time-based seed
+						rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(trialNum)))
+						result := runTrialTotalCellsVsUniverseSize(trialNum+1, universeSize, symmetricDiffSize, rng)
+						results <- result
+					}(i)
 				}
-			})
 
-			averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
-			averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+				// Close the results channel when all goroutines are done
+				go func() {
+					wg.Wait()
+					close(results)
+				}()
 
-			// Write the result to the CSV file.
-			writer.Write([]string{
-				fmt.Sprintf("%d", universeSize),
-				fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+				// Collect results
+				for result := range results {
+					totalCellsTransmitted += result
+				}
+
+				averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
+				averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+
+				// Write the result to the CSV file.
+				writer.Write([]string{
+					fmt.Sprintf("%d", universeSize),
+					fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+				})
 			})
 		}
 

@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package riblt_with_certainty_test
 
 import (
 	"encoding/csv"
@@ -8,8 +8,11 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
+
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
 )
 
 // Define a struct to hold both SuccessRate and TotalCells
@@ -43,8 +46,8 @@ func runTrialSuccessRateVsTotalCells(trialNumber int, universeSize int, symmetri
 
 	intialCells := uint64(1000)
 
-	ibfAlice := NewIBF(intialCells, "uint64")
-	ibfBob := NewIBF(intialCells, "uint64")
+	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
+	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
 
 	// Initialize the results to store success rate vs. total cells
 	results := []Result{}
@@ -87,93 +90,82 @@ func runTrialSuccessRateVsTotalCells(trialNumber int, universeSize int, symmetri
 
 // BenchmarkSuccessRateVsTotalBits benchmarks the reconciliation process with fixed universe size and varying symmetric difference sizes.
 func BenchmarkSuccessRateVsTotalBits(b *testing.B) {
-	// Define the symmetric difference sizes to test
 	symmetricDiffSizes := []int{1, 3, 30, 100, 300, 1000}
-
-	// symmetricDiffSizes := []int{100}
-
-	// Fix the universe size
 	universeSize := int(math.Pow(10, 6))
-
-	// Create a local random number generator with a time-based seed
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
-	// Each field is 64 bit.
 	cellSizeInBits := 64 * 3
-
-	// Set the number of trials
 	numTrials := 10
 
 	for _, symmetricDiffSize := range symmetricDiffSizes {
-		// Prepare a CSV file to store the results for the current symmetric difference size.
-		file, err := os.Create(fmt.Sprintf("egh_success_rate_vs_total_bits_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
-		if err != nil {
-			fmt.Println("Error creating file:", err)
-			return
-		}
-		defer file.Close()
+		b.Run(fmt.Sprintf("DiffSize=%d", symmetricDiffSize), func(b *testing.B) {
+			file, err := os.Create(fmt.Sprintf("egh_success_rate_vs_total_bits_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
+			if err != nil {
+				b.Fatalf("Error creating file: %v", err)
+			}
+			defer file.Close()
 
-		writer := csv.NewWriter(file)
-		defer writer.Flush()
+			writer := csv.NewWriter(file)
+			defer writer.Flush()
 
-		// Write the header row to the CSV file.
-		writer.Write([]string{"Total Bits Transmitted", "Success Probability"})
+			writer.Write([]string{"Total Bits Transmitted", "Success Probability"})
 
-		// Initialize to store all trials' results
-		allResults := [][]Result{}
-		maxLength := 0
+			results := make(chan []Result, numTrials)
+			var wg sync.WaitGroup
+			wg.Add(numTrials)
 
-		// Run trials for each symmetricDiffSize
-		for i := 0; i < numTrials; i++ {
-			// Perform the trial and capture the results
-			results := runTrialSuccessRateVsTotalCells(i+1, universeSize, symmetricDiffSize, rng)
+			globalSeed := time.Now().UnixNano()
 
-			// Keep track of the longest result (for padding purposes)
-			if len(results) > maxLength {
-				maxLength = len(results)
+			for i := 0; i < numTrials; i++ {
+				go func(trialNum int) {
+					defer wg.Done()
+					trialSeed := globalSeed + int64(trialNum) + rand.Int63()
+					rng := rand.New(rand.NewSource(trialSeed))
+					trialResults := runTrialSuccessRateVsTotalCells(trialNum+1, universeSize, symmetricDiffSize, rng)
+					results <- trialResults
+				}(i)
 			}
 
-			// Store the trial results
-			allResults = append(allResults, results)
-		}
+			go func() {
+				wg.Wait()
+				close(results)
+			}()
 
-		// Average the results and pad shorter ones with 1.0
-		avgResults := make([]Result, maxLength)
+			var allResults [][]Result
+			maxLength := 0
 
-		for _, results := range allResults {
-			for j := 0; j < maxLength; j++ {
-				if j < len(results) {
-					avgResults[j].SuccessRate += results[j].SuccessRate
-					avgResults[j].TotalCells += results[j].TotalCells
-				} else {
-					avgResults[j].SuccessRate += 1.0 // Pad with 1.0 for shorter trials
-					avgResults[j].TotalCells += results[len(results)-1].TotalCells
+			for trialResult := range results {
+				allResults = append(allResults, trialResult)
+				if len(trialResult) > maxLength {
+					maxLength = len(trialResult)
 				}
 			}
-		}
 
-		// Divide by the number of trials to get the average
-		for j := 0; j < maxLength; j++ {
-			avgResults[j].SuccessRate = avgResults[j].SuccessRate / float64(numTrials)
-			avgResults[j].TotalCells = int(math.Ceil(float64(avgResults[j].TotalCells) / float64(numTrials)))
-		}
+			avgResults := make([]Result, maxLength)
 
-		// Write in first line 0,0.
-		writer.Write([]string{
-			fmt.Sprintf("%d", 0),
-			fmt.Sprintf("%.4f", 0.0),
+			for _, results := range allResults {
+				for j := 0; j < maxLength; j++ {
+					if j < len(results) {
+						avgResults[j].SuccessRate += results[j].SuccessRate
+						avgResults[j].TotalCells += results[j].TotalCells
+					} else {
+						avgResults[j].SuccessRate += 1.0
+						avgResults[j].TotalCells += results[len(results)-1].TotalCells
+					}
+				}
+			}
+
+			for j := 0; j < maxLength; j++ {
+				avgResults[j].SuccessRate /= float64(numTrials)
+				avgResults[j].TotalCells = int(math.Ceil(float64(avgResults[j].TotalCells) / float64(numTrials)))
+			}
+
+			writer.Write([]string{"0", "0.0000"})
+
+			for _, avgResult := range avgResults {
+				writer.Write([]string{
+					fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits),
+					fmt.Sprintf("%.4f", avgResult.SuccessRate),
+				})
+			}
 		})
-
-		// Write the averaged results to the CSV file
-		for _, avgResult := range avgResults {
-			writer.Write([]string{
-				fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits), // Adding 1 because the index starts from 0
-				fmt.Sprintf("%.4f", avgResult.SuccessRate),
-			})
-		}
-
-		// Flush the data to the file.
-		writer.Flush()
 	}
 }

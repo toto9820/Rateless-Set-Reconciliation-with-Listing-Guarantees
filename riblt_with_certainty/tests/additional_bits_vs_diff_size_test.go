@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package riblt_with_certainty_test
 
 import (
 	"encoding/csv"
@@ -7,8 +7,11 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
+
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
 )
 
 // runTrialAdditionalCellsVsDiffSize simulates a reconciliation trial for benchmarking.
@@ -48,8 +51,8 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 
 	intialCells := uint64(1000)
 
-	ibfAlice := NewIBF(intialCells, "uint64")
-	ibfBob := NewIBF(intialCells, "uint64")
+	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
+	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
 
 	// Prepare a results list for storing the number of cells for each symmetric difference size
 	results := make([]int, len(symmetricDiffSizes))
@@ -92,76 +95,61 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 // process with a fixed universe size and different
 // symmetric difference sizes.
 func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
-	// This is the maximum symmetric difference size to test
 	maxSymmetricDiffSize := 10000
-	// maxSymmetricDiffSize := 1000
 
-	// Generate symmetric difference sizes as powers of 10 up to the maximum
 	var symmetricDiffSizes []int
 	for i := 0; i <= int(math.Log10(float64(maxSymmetricDiffSize))); i++ {
 		symmetricDiffSizes = append(symmetricDiffSizes, int(math.Pow(10, float64(i))))
 	}
 
-	// Prepare a CSV file to store the results.
 	file, err := os.Create("egh_additional_bits_vs_diff_size_set_inside_set.csv")
 	if err != nil {
-		fmt.Println("Error creating file:", err)
-		return
+		b.Fatalf("Error creating file: %v", err)
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Write the header row to the CSV file.
 	writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
 
-	// Set the number of trials
 	numTrials := 10
-	// numTrials := 1
-
-	// Set a global seed
-	globalSeed := time.Now().UnixNano()
-
-	// Bits per IBLT cell (3 fields - count, xorSum, checkSum)
-	// Each field is 64 bit.
 	cellSizeInBits := 64 * 3
-
-	// Define the universe size
-	// universeSize := int(math.Pow(10, 2))
 	universeSize := int(math.Pow(10, 6))
 
-	aggregatedAdditionalCells := make([]int, len(symmetricDiffSizes))
-
-	// Create a slice to hold trial results
-	trialResults := make([][]int, numTrials)
+	aggregatedAdditionalCells := make([]int64, len(symmetricDiffSizes))
+	globalSeed := time.Now().UnixNano()
 
 	b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
+		results := make(chan []int, numTrials)
+
+		var wg sync.WaitGroup
+		wg.Add(numTrials)
+
 		for i := 0; i < numTrials; i++ {
-			// Create a new random number generator with a unique seed for each trial
-			trialSeed := globalSeed + int64(i) + rand.Int63()
-			rng := rand.New(rand.NewSource(trialSeed))
+			go func(trialNum int) {
+				defer wg.Done()
+				trialSeed := globalSeed + int64(trialNum) + rand.Int63()
+				rng := rand.New(rand.NewSource(trialSeed))
+				trialResults := runTrialAdditionalCellsVsDiffSize(trialNum+1, universeSize, symmetricDiffSizes, rng)
+				results <- trialResults
+			}(i)
+		}
 
-			// Run the trial and get the additional cells transmitted
-			results := runTrialAdditionalCellsVsDiffSize(i+1, universeSize, symmetricDiffSizes, rng)
-			trialResults[i] = results
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
 
-			// Add a small delay between trials
-			time.Sleep(time.Millisecond)
+		for trialResult := range results {
+			for idx, additionalCells := range trialResult {
+				aggregatedAdditionalCells[idx] += int64(additionalCells)
+			}
 		}
 	})
 
-	// Aggregate additional cells from each trial result
-	for _, trialResult := range trialResults {
-		for idx, additionalCells := range trialResult {
-			aggregatedAdditionalCells[idx] += additionalCells
-		}
-	}
-
-	// Calculate the average additional cells transmitted for this symmetric difference size
-	for idx := range aggregatedAdditionalCells {
-		avgAdditionalCells := int(math.Ceil(float64(aggregatedAdditionalCells[idx]) / float64(numTrials)))
-		// Write the result to the CSV file.
+	for idx, totalAdditionalCells := range aggregatedAdditionalCells {
+		avgAdditionalCells := int(math.Ceil(float64(totalAdditionalCells) / float64(numTrials)))
 		writer.Write([]string{
 			fmt.Sprintf("%d", symmetricDiffSizes[idx]),
 			fmt.Sprintf("%d", avgAdditionalCells*cellSizeInBits),

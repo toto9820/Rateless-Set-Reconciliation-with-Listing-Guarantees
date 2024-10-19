@@ -203,8 +203,8 @@ func main() {
 
 		intialCells := uint64(1000)
 
-		ibfNode1 := NewIBF(intialCells, "hash")
-		ibfNode2 := NewIBF(intialCells, "hash")
+		ibfNode1 := NewIBF(intialCells, "hash", &EGHMapping{})
+		ibfNode2 := NewIBF(intialCells, "hash", &EGHMapping{})
 		cost := uint64(0)
 
 		for {

@@ -11,13 +11,14 @@ type IBFCell struct {
 }
 
 type InvertibleBloomFilter struct {
-	Cells      []IBFCell
-	Iteration  uint64
-	Size       uint64
-	SymbolType string // "hash" or "uint64"
+	Cells         []IBFCell
+	Iteration     uint64
+	Size          uint64
+	SymbolType    string        // "hash" or "uint64"
+	MappingMethod MappingMethod // "EGH", "OLS" or "Extended Hamming"
 }
 
-func NewIBF(size uint64, symbolType string) *InvertibleBloomFilter {
+func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBloomFilter {
 	var zeroSymbol Symbol
 	switch symbolType {
 	case "hash":
@@ -35,10 +36,11 @@ func NewIBF(size uint64, symbolType string) *InvertibleBloomFilter {
 	}
 
 	return &InvertibleBloomFilter{
-		Cells:      cells,
-		Iteration:  0,
-		Size:       0,
-		SymbolType: symbolType,
+		Cells:         cells,
+		Iteration:     0,
+		Size:          0,
+		SymbolType:    symbolType,
+		MappingMethod: mapping,
 	}
 }
 
@@ -48,18 +50,19 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 	ibf.Iteration = ibf2.Iteration
 	ibf.Size = ibf2.Size
 	ibf.SymbolType = ibf2.SymbolType
+	ibf.MappingMethod = ibf2.MappingMethod
 }
 
 func (c *IBFCell) Insert(s Symbol) {
 	c.Count++
 	c.XorSum = c.XorSum.Xor(s)
-	c.HashSum = xorBytes(c.HashSum, s.Hash())
+	c.HashSum = XorBytes(c.HashSum, s.Hash())
 }
 
 func (c *IBFCell) Subtract(c2 *IBFCell) {
 	c.Count -= c2.Count
 	c.XorSum = c.XorSum.Xor(c2.XorSum)
-	c.HashSum = xorBytes(c.HashSum, c2.HashSum)
+	c.HashSum = XorBytes(c.HashSum, c2.HashSum)
 }
 
 func (c *IBFCell) IsPure() bool {
@@ -67,13 +70,13 @@ func (c *IBFCell) IsPure() bool {
 }
 
 func (c *IBFCell) IsZero() bool {
-	return c.Count == 0 && c.XorSum.IsZero() && isZeroBytes(c.HashSum)
+	return c.Count == 0 && c.XorSum.IsZero() && IsZeroBytes(c.HashSum)
 }
 
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
-	curPrime := primes[ibf.Iteration]
+	additionalCellsCount := ibf.MappingMethod.GetAdditionalCellsCount(ibf.SymbolType, ibf.Iteration)
 
-	if ibf.Size+curPrime > uint64(len(ibf.Cells)) {
+	if ibf.Size+additionalCellsCount > uint64(len(ibf.Cells)) {
 		newCapacity := len(ibf.Cells) * 2
 
 		newCells := make([]IBFCell, newCapacity)
@@ -99,16 +102,16 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
 	}
 
 	for _, s := range symbols {
-		j := ibf.Size + ModSymbolUint64(s, curPrime)
+		j := ibf.Size + ibf.MappingMethod.MapSymbol(s, ibf.Iteration)
 		ibf.Cells[j].Insert(s)
 	}
 
-	ibf.Size += curPrime
+	ibf.Size += additionalCellsCount
 	ibf.Iteration++
 }
 
 func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *InvertibleBloomFilter {
-	difference := NewIBF(ibf.Size, ibf.SymbolType)
+	difference := NewIBF(ibf.Size, ibf.SymbolType, ibf.MappingMethod)
 	difference.Copy(ibf)
 
 	for j := uint64(0); j < ibf.Size; j++ {
@@ -148,14 +151,14 @@ func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 
 		symmetricDiff = append(symmetricDiff, xorSum)
 
-		primesSum := uint64(0)
-		for _, prime := range primes[:ibf.Iteration] {
-			cellIdx := primesSum + ModSymbolUint64(xorSum, prime)
+		offset := uint64(0)
+		for i := uint64(0); i < ibf.Iteration; i++ {
+			cellIdx := offset + ibf.MappingMethod.MapSymbol(xorSum, i)
 			ibf.Cells[cellIdx].Count -= count
 			ibf.Cells[cellIdx].XorSum = ibf.Cells[cellIdx].XorSum.Xor(xorSum)
-			ibf.Cells[cellIdx].HashSum = xorBytes(ibf.Cells[cellIdx].HashSum, xorSum.Hash())
+			ibf.Cells[cellIdx].HashSum = XorBytes(ibf.Cells[cellIdx].HashSum, xorSum.Hash())
 
-			primesSum += prime
+			offset += ibf.MappingMethod.GetAdditionalCellsCount(ibf.SymbolType, i)
 		}
 	}
 
