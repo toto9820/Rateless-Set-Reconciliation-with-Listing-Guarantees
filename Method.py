@@ -2,8 +2,10 @@
 from enum import Enum
  
 class Method(Enum):
+    """
+    The method to use for mapping symbols to IBLT cells.
+    """
     EGH = 1
-    BINARY_COVERING_ARRAY = 2
-    RECURSIVE_ARRAY = 3
-    EXTENDED_HAMMING_CODE = 4,
-    BCH = 5
+    OLS = 2,
+    ID = 3,
+    EXTENDED_HAMMING = 4

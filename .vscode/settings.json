@@ -1,3 +1,8 @@
 {
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "python.analysis.extraPaths": [
+        "./Utils"
+    ],
+    "terminal.integrated.fontSize": 16,
+    "go.testTimeout": "5m"
 }

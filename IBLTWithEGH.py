@@ -1,66 +1,77 @@
+import os
+import numba as nb
 import numpy as np
-from typing import List, Set, Tuple
-from Cell import Cell
-from queue import Queue
-from functools import reduce
+from typing import List
 from IBLT import IBLT
-from scipy.sparse import csr_matrix, vstack
-from sympy import nextprime
+from sympy import primerange
+
+@nb.njit(parallel=True, cache=True)
+def fast_generate_mapping(symbols, prime, n):
+    partial_mapping_matrix = np.zeros((prime, n), dtype=np.int8)
+
+    for i in nb.prange(len(symbols)):
+        row = symbols[i] % prime
+        col = symbols[i] - 1
+        partial_mapping_matrix[row, col] = 1
+      
+    return partial_mapping_matrix
+
+@nb.njit(cache=True)
+def get_updated_mapping_matrix(mapping_matrix, partial_mapping_matrix):
+    mapping_matrix = np.hstack((mapping_matrix, partial_mapping_matrix.T))
+    return mapping_matrix
 
 class IBLTWithEGH(IBLT):
-    def __init__(self, symbols: Set[int], n: int):
-        """
-        Initializes the Invertible Bloom Lookup Table with
-        combinatorial method EGH.
+    def __init__(self, symbols: List[int], n: int, set_inside_set: bool = True):
+        super().__init__(symbols, n, set_inside_set)
+        self.primes = [2]
+        self.symbols = np.arange(1, self.n + 1)
+        # self.mapping_matrix = np.array([], dtype=np.int8)
+        # Create mapping every chunk size iterations.
+        # Other times, just lookups.
+        self.chunk_size = 1000
+        self.offsets = []
+        self.mapping_matrix_used_rows = 0
+        self.mapping_matrix_file = 'egh_mapping_matrix.dat'
 
-        Parameters:
-        - symbols (Set[int]): set of source symbols.
-        - n (int) - universe size.
-        """
-        super().__init__(symbols, n)
-        # Finite array of primes.
-        self.primes = []
-
-    def get_next_prime(self, prev_prime: int):
-        """
-        Returns the next prime number after the given start value.
-        If start is not provided or is less than 2, it starts from 2.
-
-        Parameters:
-        - prev_prime (int): The previous prime number.
-
-        Returns:
-        - int: The next prime number.
-        """
-        return nextprime(prev_prime)
+        # Check if file exists, open in r+ mode if so, otherwise create it in w+ mode
+        # For now number of rows 10^6 until solution to resizing
+        # in case offset bigger than n is found.
+        if os.path.exists(self.mapping_matrix_file):
+            self.mapping_matrix = np.memmap(self.mapping_matrix_file, dtype=np.int8, mode='r+', shape=(10**6, n))
+        else:
+            self.mapping_matrix = np.memmap(self.mapping_matrix_file, dtype=np.int8, mode='w+', shape=(10**6, n))
+         
+    def create_mapping_matrix(self):
+        primes = primerange(10**6)
+    
     
     def generate_mapping(self, iteration: int) -> None:
-        """
-        Generates part of the mapping matrix for EGH where the number
-        of rows depends on the iteration number. 
+        if iteration == len(self.primes):
+            start = self.primes[-1] + 1
+            end = start + self.chunk_size
+            new_primes = list(primerange(start, end))
+            self.primes.extend(new_primes)
+            # self.offsets = np.cumsum(self.primes)
 
-        Parameters:
-        - iteration (int): The iteration number for trasmit/receive.
-        """
-        prime = None
-
-        if self.primes == []:
-            prime = 2
-        else:
-            prime = self.get_next_prime(self.primes[-1])
-
-        self.primes.append(prime)
-
-        partial_mapping_matrix = np.zeros((prime, self.n), dtype=int)
-
-        for symbol in range(1, self.n + 1):
-            res = symbol % prime
-            partial_mapping_matrix[res, symbol - 1] = 1
-
-        self.partial_mapping_matrix = csr_matrix(partial_mapping_matrix)
+        prime = self.primes[iteration - 1]
+        self.partial_mapping_matrix = fast_generate_mapping(self.symbols, prime, self.n)
 
         if iteration == 1:
-            self.mapping_matrix = self.partial_mapping_matrix
+            # self.mapping_matrix = [(self.partial_mapping_matrix, 0)]
+            self.mapping_matrix[:prime] = self.partial_mapping_matrix
+            self.mapping_matrix_used_rows = prime
         else:
-            self.mapping_matrix = vstack([self.mapping_matrix, self.partial_mapping_matrix])
+            # offset = self.offsets[iteration - 2]
+            offset = self.mapping_matrix_used_rows
+            # self.mapping_matrix.append((self.partial_mapping_matrix, offset))
+
+            self.mapping_matrix[offset:offset+prime] = self.partial_mapping_matrix
+            self.mapping_matrix_used_rows += prime
     
+    def get_current_mapping_rows(self):
+        """
+        Gets number of current rows for mapping matrix that are
+        used for listing.
+        """
+        return self.mapping_matrix_used_rows
