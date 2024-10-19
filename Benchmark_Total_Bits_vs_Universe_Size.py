@@ -83,7 +83,7 @@ def benchmark_total_bits_vs_universe_size(universe_size: int,
             symmetric_difference_sizes=[1,2,3]
         elif method == Method.OLS:
             universe_trials_start = 4
-            universe_trials -= 1
+            # universe_trials -= 1
         else:
             universe_trials_start = 3
 
@@ -103,7 +103,7 @@ def benchmark_total_bits_vs_universe_size(universe_size: int,
                 
                 processes_num = int(multiprocessing.cpu_count() * 0.25)
                 # Use Pool to run trials in parallel
-                with get_pool(processes_num) as pool:
+                with get_pool(1) as pool:
                     # Use imap_unordered for better performance with large number of items
                     for i, cells_transmitted in enumerate(pool.imap_unordered(partial_run_trial, range(1, trials_per_universe_size + 1))):
                         total_cells_transmitted += cells_transmitted
