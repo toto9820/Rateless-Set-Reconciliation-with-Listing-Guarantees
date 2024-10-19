@@ -50,7 +50,7 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 
 		// Subtract the two IBFs and Decode the result to find the differences
 		ibfDiff := ibfBob.Subtract(ibfAlice)
-		bobWithoutAlice, _, ok := ibfDiff.Decode()
+		bobWithoutAlice, ok := ibfDiff.Decode()
 
 		if ok == false {
 			continue

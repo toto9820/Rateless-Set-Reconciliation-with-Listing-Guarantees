@@ -63,7 +63,7 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 
 		// Subtract the two IBFs and Decode the result to find the differences
 		ibfDiff := ibfBob.Subtract(ibfAlice)
-		bobWithoutAlice, _, _ := ibfDiff.Decode()
+		bobWithoutAlice, _ := ibfDiff.Decode()
 
 		if len(bobWithoutAlice) > 0 {
 			curSymmetricDiffSize = len(bobWithoutAlice)
