@@ -2,16 +2,17 @@ package riblt_with_certainty
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/holiman/uint256"
 )
 
 // Symbol is an interface that can be either a
 // common.Hash or a uint64
 type Symbol interface {
 	Xor(Symbol) Symbol
-	Hash() [32]byte
+	Hash() Hash
 	IsZero() bool
 	Equal(Symbol) bool
 }
@@ -28,8 +29,9 @@ func (h HashSymbol) Xor(other Symbol) Symbol {
 	return result
 }
 
-func (h HashSymbol) Hash() [32]byte {
-	return sha256.Sum256(h[:])
+// Change the Hash method to return a byte array
+func (h HashSymbol) Hash() Hash {
+	return CommonHash(sha256.Sum256(h[:]))
 }
 
 func (h HashSymbol) IsZero() bool {
@@ -49,9 +51,11 @@ func (u Uint64Symbol) Xor(other Symbol) Symbol {
 	return Uint64Symbol(uint64(u) ^ uint64(o))
 }
 
-func (u Uint64Symbol) Hash() [32]byte {
-	buf := uint256.NewInt(uint64(u)).Bytes()
-	return sha256.Sum256(buf)
+func (u Uint64Symbol) Hash() Hash {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(u))
+	hash := xxhash.Sum64(buf)
+	return Uint64Hash(hash)
 }
 
 func (u Uint64Symbol) IsZero() bool {

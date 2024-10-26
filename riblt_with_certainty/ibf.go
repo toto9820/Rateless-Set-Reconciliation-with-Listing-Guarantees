@@ -1,13 +1,9 @@
 package riblt_with_certainty
 
-import (
-	"github.com/ethereum/go-ethereum/common"
-)
-
 type IBFCell struct {
 	Count   int64
 	XorSum  Symbol
-	HashSum common.Hash
+	HashSum Hash
 }
 
 type InvertibleBloomFilter struct {
@@ -20,11 +16,14 @@ type InvertibleBloomFilter struct {
 
 func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBloomFilter {
 	var zeroSymbol Symbol
+	var zeroHashSum Hash
 	switch symbolType {
 	case "hash":
 		zeroSymbol = HashSymbol{}
+		zeroHashSum = CommonHash{}
 	case "uint64":
 		zeroSymbol = Uint64Symbol(0)
+		zeroHashSum = Uint64Hash(0)
 	default:
 		panic("Invalid symbol type")
 	}
@@ -33,6 +32,7 @@ func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBl
 
 	for i := range cells {
 		cells[i].XorSum = zeroSymbol
+		cells[i].HashSum = zeroHashSum
 	}
 
 	return &InvertibleBloomFilter{
@@ -56,13 +56,13 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 func (c *IBFCell) Insert(s Symbol) {
 	c.Count++
 	c.XorSum = c.XorSum.Xor(s)
-	c.HashSum = XorBytes(c.HashSum, s.Hash())
+	c.HashSum = c.HashSum.Xor(s.Hash())
 }
 
 func (c *IBFCell) Subtract(c2 *IBFCell) {
 	c.Count -= c2.Count
 	c.XorSum = c.XorSum.Xor(c2.XorSum)
-	c.HashSum = XorBytes(c.HashSum, c2.HashSum)
+	c.HashSum = c.HashSum.Xor(c2.HashSum)
 }
 
 func (c *IBFCell) IsPure() bool {
@@ -70,7 +70,7 @@ func (c *IBFCell) IsPure() bool {
 }
 
 func (c *IBFCell) IsZero() bool {
-	return c.Count == 0 && c.XorSum.IsZero() && IsZeroBytes(c.HashSum)
+	return c.Count == 0 && c.XorSum.IsZero() && c.HashSum.IsZero()
 }
 
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
@@ -156,7 +156,7 @@ func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 			cellIdx := offset + ibf.MappingMethod.MapSymbol(xorSum, i)
 			ibf.Cells[cellIdx].Count -= count
 			ibf.Cells[cellIdx].XorSum = ibf.Cells[cellIdx].XorSum.Xor(xorSum)
-			ibf.Cells[cellIdx].HashSum = XorBytes(ibf.Cells[cellIdx].HashSum, xorSum.Hash())
+			ibf.Cells[cellIdx].HashSum = ibf.Cells[cellIdx].HashSum.Xor(xorSum.Hash())
 
 			offset += ibf.MappingMethod.GetAdditionalCellsCount(ibf.SymbolType, i)
 		}
