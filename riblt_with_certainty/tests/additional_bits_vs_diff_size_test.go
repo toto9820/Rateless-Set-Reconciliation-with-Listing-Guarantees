@@ -18,6 +18,7 @@ import (
 func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSizes []int,
+	mappingType MappingType,
 	rng *rand.Rand) []int {
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
@@ -49,10 +50,20 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 		return uint64(alice[i].(Uint64Symbol)) < uint64(alice[j].(Uint64Symbol))
 	})
 
-	intialCells := uint64(1000)
+	initialCells := uint64(1000)
+	var ibfAlice, ibfBob *InvertibleBloomFilter
 
-	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
-	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
+	switch mappingType {
+	case EGH:
+		ibfAlice = NewIBF(initialCells, "uint64", &EGHMapping{})
+		ibfBob = NewIBF(initialCells, "uint64", &EGHMapping{})
+	case OLS:
+		olsMapping := OLSMapping{
+			Order: uint64(math.Sqrt(float64(universeSize))),
+		}
+		ibfAlice = NewIBF(initialCells, "uint64", &olsMapping)
+		ibfBob = NewIBF(initialCells, "uint64", &olsMapping)
+	}
 
 	// Prepare a results list for storing the number of cells for each symmetric difference size
 	results := make([]int, len(symmetricDiffSizes))
@@ -97,62 +108,66 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 	maxSymmetricDiffSize := 10000
 
+	mappingTypes := []MappingType{EGH, OLS}
+
 	var symmetricDiffSizes []int
 	for i := 0; i <= int(math.Log10(float64(maxSymmetricDiffSize))); i++ {
 		symmetricDiffSizes = append(symmetricDiffSizes, int(math.Pow(10, float64(i))))
 	}
 
-	file, err := os.Create("egh_additional_bits_vs_diff_size_set_inside_set.csv")
-	if err != nil {
-		b.Fatalf("Error creating file: %v", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
-
-	numTrials := 10
-	cellSizeInBits := 64 * 3
-	universeSize := int(math.Pow(10, 6))
-
-	aggregatedAdditionalCells := make([]int64, len(symmetricDiffSizes))
-	globalSeed := time.Now().UnixNano()
-
-	b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
-		results := make(chan []int, numTrials)
-
-		var wg sync.WaitGroup
-		wg.Add(numTrials)
-
-		for i := 0; i < numTrials; i++ {
-			go func(trialNum int) {
-				defer wg.Done()
-				trialSeed := globalSeed + int64(trialNum) + rand.Int63()
-				rng := rand.New(rand.NewSource(trialSeed))
-				trialResults := runTrialAdditionalCellsVsDiffSize(trialNum+1, universeSize, symmetricDiffSizes, rng)
-				results <- trialResults
-			}(i)
+	for _, mappingType := range mappingTypes {
+		file, err := os.Create(fmt.Sprintf("%s_additional_bits_vs_diff_size_set_inside_set.csv", string(mappingType)))
+		if err != nil {
+			b.Fatalf("Error creating file: %v", err)
 		}
+		defer file.Close()
 
-		go func() {
-			wg.Wait()
-			close(results)
-		}()
+		writer := csv.NewWriter(file)
+		defer writer.Flush()
 
-		for trialResult := range results {
-			for idx, additionalCells := range trialResult {
-				aggregatedAdditionalCells[idx] += int64(additionalCells)
+		writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
+
+		numTrials := 10
+		cellSizeInBits := 64 * 3
+		universeSize := int(math.Pow(10, 6))
+
+		aggregatedAdditionalCells := make([]int64, len(symmetricDiffSizes))
+		globalSeed := time.Now().UnixNano()
+
+		b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
+			results := make(chan []int, numTrials)
+
+			var wg sync.WaitGroup
+			wg.Add(numTrials)
+
+			for i := 0; i < numTrials; i++ {
+				go func(trialNum int) {
+					defer wg.Done()
+					trialSeed := globalSeed + int64(trialNum) + rand.Int63()
+					rng := rand.New(rand.NewSource(trialSeed))
+					trialResults := runTrialAdditionalCellsVsDiffSize(trialNum+1, universeSize, symmetricDiffSizes, mappingType, rng)
+					results <- trialResults
+				}(i)
 			}
-		}
-	})
 
-	for idx, totalAdditionalCells := range aggregatedAdditionalCells {
-		avgAdditionalCells := int(math.Ceil(float64(totalAdditionalCells) / float64(numTrials)))
-		writer.Write([]string{
-			fmt.Sprintf("%d", symmetricDiffSizes[idx]),
-			fmt.Sprintf("%d", avgAdditionalCells*cellSizeInBits),
+			go func() {
+				wg.Wait()
+				close(results)
+			}()
+
+			for trialResult := range results {
+				for idx, additionalCells := range trialResult {
+					aggregatedAdditionalCells[idx] += int64(additionalCells)
+				}
+			}
 		})
+
+		for idx, totalAdditionalCells := range aggregatedAdditionalCells {
+			avgAdditionalCells := int(math.Ceil(float64(totalAdditionalCells) / float64(numTrials)))
+			writer.Write([]string{
+				fmt.Sprintf("%d", symmetricDiffSizes[idx]),
+				fmt.Sprintf("%d", avgAdditionalCells*cellSizeInBits),
+			})
+		}
 	}
 }

@@ -22,7 +22,11 @@ type Result struct {
 }
 
 // runTrialSuccessRateVsTotalCells simulates a reconciliation trial and computes the success rate vs. total cells.
-func runTrialSuccessRateVsTotalCells(trialNumber int, universeSize int, symmetricDiffSize int, rng *rand.Rand) []Result {
+func runTrialSuccessRateVsTotalCells(trialNumber int,
+	universeSize int,
+	symmetricDiffSize int,
+	mappingType MappingType,
+	rng *rand.Rand) []Result {
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
 	bob := make([]Symbol, 0, universeSize)
@@ -44,10 +48,20 @@ func runTrialSuccessRateVsTotalCells(trialNumber int, universeSize int, symmetri
 		return uint64(alice[i].(Uint64Symbol)) < uint64(alice[j].(Uint64Symbol))
 	})
 
-	intialCells := uint64(1000)
+	initialCells := uint64(1000)
+	var ibfAlice, ibfBob *InvertibleBloomFilter
 
-	ibfAlice := NewIBF(intialCells, "uint64", &EGHMapping{})
-	ibfBob := NewIBF(intialCells, "uint64", &EGHMapping{})
+	switch mappingType {
+	case EGH:
+		ibfAlice = NewIBF(initialCells, "uint64", &EGHMapping{})
+		ibfBob = NewIBF(initialCells, "uint64", &EGHMapping{})
+	case OLS:
+		olsMapping := OLSMapping{
+			Order: uint64(math.Sqrt(float64(universeSize))),
+		}
+		ibfAlice = NewIBF(initialCells, "uint64", &olsMapping)
+		ibfBob = NewIBF(initialCells, "uint64", &olsMapping)
+	}
 
 	// Initialize the results to store success rate vs. total cells
 	results := []Result{}
@@ -95,77 +109,81 @@ func BenchmarkSuccessRateVsTotalBits(b *testing.B) {
 	cellSizeInBits := 64 * 3
 	numTrials := 10
 
-	for _, symmetricDiffSize := range symmetricDiffSizes {
-		b.Run(fmt.Sprintf("DiffSize=%d", symmetricDiffSize), func(b *testing.B) {
-			file, err := os.Create(fmt.Sprintf("egh_success_rate_vs_total_bits_diff_size_%d_set_inside_set.csv", symmetricDiffSize))
-			if err != nil {
-				b.Fatalf("Error creating file: %v", err)
-			}
-			defer file.Close()
+	mappingTypes := []MappingType{EGH, OLS}
 
-			writer := csv.NewWriter(file)
-			defer writer.Flush()
-
-			writer.Write([]string{"Total Bits Transmitted", "Success Probability"})
-
-			results := make(chan []Result, numTrials)
-			var wg sync.WaitGroup
-			wg.Add(numTrials)
-
-			globalSeed := time.Now().UnixNano()
-
-			for i := 0; i < numTrials; i++ {
-				go func(trialNum int) {
-					defer wg.Done()
-					trialSeed := globalSeed + int64(trialNum) + rand.Int63()
-					rng := rand.New(rand.NewSource(trialSeed))
-					trialResults := runTrialSuccessRateVsTotalCells(trialNum+1, universeSize, symmetricDiffSize, rng)
-					results <- trialResults
-				}(i)
-			}
-
-			go func() {
-				wg.Wait()
-				close(results)
-			}()
-
-			var allResults [][]Result
-			maxLength := 0
-
-			for trialResult := range results {
-				allResults = append(allResults, trialResult)
-				if len(trialResult) > maxLength {
-					maxLength = len(trialResult)
+	for _, mappingType := range mappingTypes {
+		for _, symmetricDiffSize := range symmetricDiffSizes {
+			b.Run(fmt.Sprintf("DiffSize=%d", symmetricDiffSize), func(b *testing.B) {
+				file, err := os.Create(fmt.Sprintf("%s_success_rate_vs_total_bits_diff_size_%d_set_inside_set.csv", string(mappingType), symmetricDiffSize))
+				if err != nil {
+					b.Fatalf("Error creating file: %v", err)
 				}
-			}
+				defer file.Close()
 
-			avgResults := make([]Result, maxLength)
+				writer := csv.NewWriter(file)
+				defer writer.Flush()
 
-			for _, results := range allResults {
-				for j := 0; j < maxLength; j++ {
-					if j < len(results) {
-						avgResults[j].SuccessRate += results[j].SuccessRate
-						avgResults[j].TotalCells += results[j].TotalCells
-					} else {
-						avgResults[j].SuccessRate += 1.0
-						avgResults[j].TotalCells += results[len(results)-1].TotalCells
+				writer.Write([]string{"Total Bits Transmitted", "Success Probability"})
+
+				results := make(chan []Result, numTrials)
+				var wg sync.WaitGroup
+				wg.Add(numTrials)
+
+				globalSeed := time.Now().UnixNano()
+
+				for i := 0; i < numTrials; i++ {
+					go func(trialNum int) {
+						defer wg.Done()
+						trialSeed := globalSeed + int64(trialNum) + rand.Int63()
+						rng := rand.New(rand.NewSource(trialSeed))
+						trialResults := runTrialSuccessRateVsTotalCells(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
+						results <- trialResults
+					}(i)
+				}
+
+				go func() {
+					wg.Wait()
+					close(results)
+				}()
+
+				var allResults [][]Result
+				maxLength := 0
+
+				for trialResult := range results {
+					allResults = append(allResults, trialResult)
+					if len(trialResult) > maxLength {
+						maxLength = len(trialResult)
 					}
 				}
-			}
 
-			for j := 0; j < maxLength; j++ {
-				avgResults[j].SuccessRate /= float64(numTrials)
-				avgResults[j].TotalCells = int(math.Ceil(float64(avgResults[j].TotalCells) / float64(numTrials)))
-			}
+				avgResults := make([]Result, maxLength)
 
-			writer.Write([]string{"0", "0.0000"})
+				for _, results := range allResults {
+					for j := 0; j < maxLength; j++ {
+						if j < len(results) {
+							avgResults[j].SuccessRate += results[j].SuccessRate
+							avgResults[j].TotalCells += results[j].TotalCells
+						} else {
+							avgResults[j].SuccessRate += 1.0
+							avgResults[j].TotalCells += results[len(results)-1].TotalCells
+						}
+					}
+				}
 
-			for _, avgResult := range avgResults {
-				writer.Write([]string{
-					fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits),
-					fmt.Sprintf("%.4f", avgResult.SuccessRate),
-				})
-			}
-		})
+				for j := 0; j < maxLength; j++ {
+					avgResults[j].SuccessRate /= float64(numTrials)
+					avgResults[j].TotalCells = int(math.Ceil(float64(avgResults[j].TotalCells) / float64(numTrials)))
+				}
+
+				writer.Write([]string{"0", "0.0000"})
+
+				for _, avgResult := range avgResults {
+					writer.Write([]string{
+						fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits),
+						fmt.Sprintf("%.4f", avgResult.SuccessRate),
+					})
+				}
+			})
+		}
 	}
 }

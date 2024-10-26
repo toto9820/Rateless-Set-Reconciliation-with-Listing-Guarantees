@@ -17,28 +17,23 @@ func (e *EGHMapping) GetAdditionalCellsCount(symbolType string, iteration uint64
 	return curPrime
 }
 
-// const defualtOLSChunk uint64 = 1000
+type OLSMapping struct {
+	Order uint64 // Order of each Latin square
+}
 
-// type OLSMapping struct {
-// 	s uint64 // Order of each Latin square
-// 	n uint64 // Total number of symbols
-// }
+func (o *OLSMapping) MapSymbol(symbol Symbol, iteration uint64) uint64 {
+	latinSquareNum := iteration - 1
+	symbolIndex := SubstractSymbolUint64(symbol, 1)
 
-// func (o *OLSMapping) MapSymbol(symbol Symbol, iteration uint64) uint64 {
-// 	row := iteration % uint64(len(o.squares))                   // Select square based on iteration
-// 	col := ModSymbolUint64(symbol, uint64(len(o.squares[row]))) // Use symbol to determine column
-// 	return o.squares[row][col]                                  // Return mapped value from the OLS
-// }
+	// Calculate row and column for the symbol
+	row := symbolIndex / o.Order
+	col := symbolIndex % o.Order
 
-// func (o *OLSMapping) GetAdditionalCellsCount(symbolType string, iteration uint64) uint64 {
-// 	switch symbolType {
-// 	// No need for sqrt(n) as n is really big for hash type,
-// 	// while its transaction pool relatively small compared to it.
-// 	case "hash":
-// 		return defualtOLSChunk
-// 	case "uint64":
-// 		return o.s
-// 	default:
-// 		panic("Invalid symbol type")
-// 	}
-// }
+	mappedValue := (col + (row * latinSquareNum)) % o.Order
+
+	return mappedValue
+}
+
+func (o *OLSMapping) GetAdditionalCellsCount(symbolType string, iteration uint64) uint64 {
+	return o.Order
+}

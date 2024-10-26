@@ -10,7 +10,7 @@ type InvertibleBloomFilter struct {
 	Cells         []IBFCell
 	Iteration     uint64
 	Size          uint64
-	SymbolType    string        // "hash" or "uint64"
+	SymbolType    string        // "hash" or "uint64" or "uint32"
 	MappingMethod MappingMethod // "EGH", "OLS" or "Extended Hamming"
 }
 
@@ -24,6 +24,9 @@ func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBl
 	case "uint64":
 		zeroSymbol = Uint64Symbol(0)
 		zeroHashSum = Uint64Hash(0)
+	case "uint32":
+		zeroSymbol = Uint32Symbol(0)
+		zeroHashSum = Uint32Hash(0)
 	default:
 		panic("Invalid symbol type")
 	}
@@ -82,18 +85,25 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
 		newCells := make([]IBFCell, newCapacity)
 
 		var zeroSymbol Symbol
+		var zeroHashSum Hash
 
 		switch ibf.SymbolType {
 		case "hash":
 			zeroSymbol = HashSymbol{}
+			zeroHashSum = CommonHash{}
 		case "uint64":
 			zeroSymbol = Uint64Symbol(0)
+			zeroHashSum = Uint64Hash(0)
+		case "uint32":
+			zeroSymbol = Uint32Symbol(0)
+			zeroHashSum = Uint32Hash(0)
 		default:
 			panic("Invalid symbol type")
 		}
 
 		for i := range newCells {
 			newCells[i].XorSum = zeroSymbol
+			newCells[i].HashSum = zeroHashSum
 		}
 
 		copy(newCells, ibf.Cells)

@@ -6,10 +6,11 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/spaolacci/murmur3"
 )
 
 // Symbol is an interface that can be either a
-// common.Hash or a uint64
+// common.Hash or a uint64 or uint32
 type Symbol interface {
 	Xor(Symbol) Symbol
 	Hash() Hash
@@ -64,5 +65,30 @@ func (u Uint64Symbol) IsZero() bool {
 
 func (u Uint64Symbol) Equal(other Symbol) bool {
 	o := other.(Uint64Symbol)
+	return u == o
+}
+
+// Uint64Symbol wraps uint64 to implement the Symbol interface
+type Uint32Symbol uint32
+
+func (u Uint32Symbol) Xor(other Symbol) Symbol {
+	o := other.(Uint32Symbol)
+	return Uint64Symbol(uint32(u) ^ uint32(o))
+}
+
+func (u Uint32Symbol) Hash() Hash {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(u))
+	// Add support for different seed - for multiple sessions.
+	hash := murmur3.Sum32WithSeed(buf, 0)
+	return Uint32Hash(hash)
+}
+
+func (u Uint32Symbol) IsZero() bool {
+	return u == 0
+}
+
+func (u Uint32Symbol) Equal(other Symbol) bool {
+	o := other.(Uint32Symbol)
 	return u == o
 }

@@ -19,6 +19,40 @@ func IsZeroBytes(a [32]byte) bool {
 	return true
 }
 
+func SubstractSymbolUint64(s Symbol, m uint64) uint64 {
+	switch sym := s.(type) {
+	case HashSymbol:
+		var bigIntHash *uint256.Int = new(uint256.Int)
+		bigIntHash = bigIntHash.SetBytes(sym[:])
+		bigIntMod := uint256.NewInt(m)
+		bigIntHash.Sub(bigIntHash, bigIntMod)
+		return bigIntHash.Uint64()
+	case Uint64Symbol:
+		return uint64(sym) - m
+	case Uint32Symbol:
+		return uint64(uint32(sym)) - m
+	default:
+		panic("Unsupported Symbol type")
+	}
+}
+
+func DivideSymbolUint64(s Symbol, m uint64) uint64 {
+	switch sym := s.(type) {
+	case HashSymbol:
+		var bigIntHash *uint256.Int = new(uint256.Int)
+		bigIntHash = bigIntHash.SetBytes(sym[:])
+		bigIntMod := uint256.NewInt(m)
+		bigIntHash.Div(bigIntHash, bigIntMod)
+		return bigIntHash.Uint64()
+	case Uint64Symbol:
+		return uint64(sym) / m
+	case Uint32Symbol:
+		return uint64(uint32(sym)) / m
+	default:
+		panic("Unsupported Symbol type")
+	}
+}
+
 func ModSymbolUint64(s Symbol, m uint64) uint64 {
 	switch sym := s.(type) {
 	case HashSymbol:
@@ -29,6 +63,8 @@ func ModSymbolUint64(s Symbol, m uint64) uint64 {
 		return bigIntHash.Uint64()
 	case Uint64Symbol:
 		return uint64(sym) % m
+	case Uint32Symbol:
+		return uint64(uint32(sym)) % m
 	default:
 		panic("Unsupported Symbol type")
 	}
