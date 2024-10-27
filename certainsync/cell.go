@@ -8,6 +8,7 @@ type Cell interface {
 	Subtract(c Cell)
 	IsPure() bool
 	IsZero() bool
+	IsZeroExtended() bool
 	GetXorSum() Symbol
 }
 
@@ -53,6 +54,10 @@ func (c *IBFCell) IsZero() bool {
 		c.HashSum.IsZero()
 }
 
+func (c *IBFCell) IsZeroExtended() bool {
+	return c.IsZero()
+}
+
 // GetXorSum is a getter of XorSum field of IBFCell
 func (c *IBFCell) GetXorSum() Symbol {
 	return c.XorSum
@@ -96,7 +101,13 @@ func (c *ExtendedIBFCell) IsPure() bool {
 
 // IsZero checks if the extended cell is empty
 func (c *ExtendedIBFCell) IsZero() bool {
-	return c.IBFCell.IsZero() && c.FullXorSum.IsZero()
+	return c.IBFCell.IsZero()
+}
+
+// IsZeroExtended checks if the extended cell is empty,
+// including its extra FullXorSum field.
+func (c *ExtendedIBFCell) IsZeroExtended() bool {
+	return c.IsZero() && c.FullXorSum.IsZero()
 }
 
 // GetXorSum is a getter of XorSum field of ExtendedIBFCell

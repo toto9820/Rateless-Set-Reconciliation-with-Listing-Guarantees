@@ -36,11 +36,11 @@ type ExtendedInvertibleBloomFilter struct {
 	Size          uint64
 	SymbolType    string
 	MappingMethod MappingMethod
-	Seed          uint32
+	HashSeed      uint32
 }
 
 // NewIBF creates a new InvertibleBloomFilter instance
-func NewIBF(size uint64, symbolType string, mapping MappingMethod, universeReduction ...bool) *InvertibleBloomFilter {
+func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBloomFilter {
 	cells := make([]Cell, size)
 
 	for i := range cells {
@@ -59,9 +59,8 @@ func NewIBF(size uint64, symbolType string, mapping MappingMethod, universeReduc
 
 // NewIBF creates a new InvertibleBloomFilter instance
 // with cells of type ExtendedIBFCell.
-func NewIBFExtended(size uint64, symbolType string, mapping MappingMethod, universeReduction ...bool) *ExtendedInvertibleBloomFilter {
+func NewIBFExtended(size uint64, symbolType string, mapping MappingMethod, hashSeed uint32) *ExtendedInvertibleBloomFilter {
 	cells := make([]Cell, size)
-	seed := GenerateRandomSeed()
 
 	for i := range cells {
 		cells[i] = &ExtendedIBFCell{}
@@ -74,7 +73,7 @@ func NewIBFExtended(size uint64, symbolType string, mapping MappingMethod, unive
 		Size:          size,
 		SymbolType:    symbolType,
 		MappingMethod: mapping,
-		Seed:          seed,
+		HashSeed:      hashSeed,
 	}
 }
 
@@ -85,6 +84,16 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 	ibf.Size = ibf2.Size
 	ibf.SymbolType = ibf2.SymbolType
 	ibf.MappingMethod = ibf2.MappingMethod
+}
+
+func (ibf *ExtendedInvertibleBloomFilter) Copy(ibf2 *ExtendedInvertibleBloomFilter) {
+	ibf.Cells = make([]Cell, len(ibf2.Cells))
+	copy(ibf.Cells, ibf2.Cells)
+	ibf.Iteration = ibf2.Iteration
+	ibf.Size = ibf2.Size
+	ibf.SymbolType = ibf2.SymbolType
+	ibf.MappingMethod = ibf2.MappingMethod
+	ibf.HashSeed = ibf2.HashSeed
 }
 
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
@@ -171,4 +180,13 @@ func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 
 	ok = true
 	return
+}
+
+func (ibf *ExtendedInvertibleBloomFilter) IsFullyEmpty() bool {
+	for j := uint64(0); j < ibf.Size; j++ {
+		if !ibf.Cells[j].IsZeroExtended() {
+			return false
+		}
+	}
+	return true
 }
