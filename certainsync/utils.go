@@ -1,6 +1,18 @@
-package riblt_with_certainty
+package certainsync
 
-import "github.com/holiman/uint256"
+import (
+	"time"
+
+	"github.com/holiman/uint256"
+	"golang.org/x/exp/rand"
+)
+
+func GenerateRandomSeed() uint32 {
+	// Seed the random number generator
+	rand.Seed(uint64(time.Now().UnixNano()))
+	// Generate a random uint32 seed
+	return rand.Uint32()
+}
 
 func XorBytes(a, b [32]byte) [32]byte {
 	var result [32]byte

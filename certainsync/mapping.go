@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package certainsync
 
 type MappingMethod interface {
 	MapSymbol(s Symbol, iteration uint64) uint64

@@ -1,4 +1,4 @@
-package riblt_with_certainty_test
+package certainsync_test
 
 import (
 	"encoding/csv"
@@ -12,18 +12,11 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
-)
-
-type MappingType string
-
-const (
-	EGH MappingType = "egh"
-	OLS MappingType = "ols"
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
-func runTrialTotalCellsVsDiffSize(trialNumber int,
+func runTrialTotalCellsVsUniverseSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSize int,
 	mappingType MappingType,
@@ -39,9 +32,9 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 	alice := make([]Symbol, 0, universeSize-symmetricDiffSize)
 
 	// Randomly choose indices from Bob's set to include in Alice's set.
-	chosenIndices := rng.Perm(universeSize)[:universeSize-symmetricDiffSize]
+	chosenIndices := rng.Perm(universeSize)[:universeSize-symmetricDiffSize] // Random permutation.
 	for _, idx := range chosenIndices {
-		alice = append(alice, bob[idx])
+		alice = append(alice, bob[idx]) // idx is within 0 to universeSize-1
 	}
 
 	// Sort Alice's set.
@@ -70,25 +63,9 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 		ibfAlice.AddSymbols(alice)
 		ibfBob.AddSymbols(bob)
 
+		// Subtract the two IBFs and Decode the result to find the differences
 		ibfDiff := ibfBob.Subtract(ibfAlice)
 		bobWithoutAlice, ok := ibfDiff.Decode()
-
-		// occurrences := make(map[uint64]bool)
-		// hasDuplicates := false
-
-		// for _, value := range bobWithoutAlice {
-		// 	// Check if value already exists in the occurrences map
-		// 	if occurrences[uint64(value.(Uint64Symbol))] {
-		// 		fmt.Printf("Duplicate found: %d\n", value)
-		// 		hasDuplicates = true
-		// 	} else {
-		// 		occurrences[uint64(value.(Uint64Symbol))] = true
-		// 	}
-		// }
-
-		// if !hasDuplicates {
-		// 	fmt.Println("No duplicates found.")
-		// }
 
 		if ok == false {
 			continue
@@ -100,79 +77,73 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 		}
 	}
 
-	fmt.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d cells\n",
-		trialNumber, mappingType, symmetricDiffSize, cost)
-	log.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d cells\n",
-		trialNumber, mappingType, symmetricDiffSize, cost)
+	fmt.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d cells", trialNumber, symmetricDiffSize, cost)
+	fmt.Println()
 
+	log.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d cells\n", trialNumber, symmetricDiffSize, cost)
+
+	// Return number of coded symbols transmitted
 	return cost
 }
 
-// BenchmarkReconciliation benchmarks both EGH and OLS methods
-func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
-	benches := []struct {
-		symmetricDiffSize int
-	}{
-		{1},
-		{10},
-		{100},
-		{1000},
-		{10000},
+// BenchmarkTotalBitsVsUniverseSize benchmarks the reconciliation
+// process with fixed symmetric difference sizes and varying universe sizes.
+func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
+	symmetricDiffSizes := []int{1, 3, 30, 90}
+	universeSizes := []int{
+		int(math.Pow(10, 3)), // 1,000
+		int(math.Pow(10, 4)), // 10,000
+		int(math.Pow(10, 5)), // 100,000
+		int(math.Pow(10, 6)), // 1,000,000
+		int(math.Pow(10, 7)), // 10,000,000
 	}
 
 	cellSizeInBits := 64 * 3
-	universeSize := int(math.Pow(10, 6))
-	// For Debugging
-	// numTrials := 1
 	numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
-		// Create a CSV file for each mapping type
-		filename := fmt.Sprintf("%s_total_bits_vs_diff_size_set_inside_set.csv",
-			string(mappingType))
-		file, err := os.Create(filename)
-		if err != nil {
-			b.Fatalf("Error creating file for %s: %v", mappingType, err)
-		}
-		defer file.Close()
+		for _, symmetricDiffSize := range symmetricDiffSizes {
+			// Prepare a CSV file to store the results for the current symmetric difference size.
+			file, err := os.Create(fmt.Sprintf("%s_total_bits_vs_universe_size_for_diff_size_%d_set_inside_set.csv", string(mappingType), symmetricDiffSize))
+			if err != nil {
+				b.Fatalf("Error creating file: %v", err)
+			}
+			defer file.Close()
 
-		writer := csv.NewWriter(file)
-		defer writer.Flush()
+			writer := csv.NewWriter(file)
+			defer writer.Flush()
 
-		// Write the header row
-		writer.Write([]string{"Symmetric Diff Size", "Total Bits Transmitted"})
+			// Write the header row to the CSV file.
+			writer.Write([]string{"Universe Size", "Total Bits Transmitted"})
 
-		for _, bench := range benches {
-			b.Run(fmt.Sprintf("%s_Universe=%d_Diff=%d",
-				mappingType, universeSize, bench.symmetricDiffSize),
-				func(b *testing.B) {
+			for _, universeSize := range universeSizes {
+				b.Run(fmt.Sprintf("DiffSize=%d, Universe=%d", symmetricDiffSize, universeSize), func(b *testing.B) {
 					results := make(chan uint64, numTrials)
 					var totalCellsTransmitted uint64
 
+					// Create a wait group to synchronize goroutines
 					var wg sync.WaitGroup
 					wg.Add(numTrials)
 
+					// Run trials concurrently
 					for i := 0; i < numTrials; i++ {
 						go func(trialNum int) {
 							defer wg.Done()
+							// Create a local random number generator with a time-based seed
 							rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(trialNum)))
-							result := runTrialTotalCellsVsDiffSize(
-								trialNum+1,
-								universeSize,
-								bench.symmetricDiffSize,
-								mappingType,
-								rng,
-							)
+							result := runTrialTotalCellsVsUniverseSize(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
 							results <- result
 						}(i)
 					}
 
+					// Close the results channel when all goroutines are done
 					go func() {
 						wg.Wait()
 						close(results)
 					}()
 
+					// Collect results
 					for result := range results {
 						totalCellsTransmitted += result
 					}
@@ -180,11 +151,16 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 					averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
 					averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
 
+					// Write the result to the CSV file.
 					writer.Write([]string{
-						fmt.Sprintf("%d", bench.symmetricDiffSize),
+						fmt.Sprintf("%d", universeSize),
 						fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
 					})
 				})
+			}
+
+			// Flush the data to the file.
+			writer.Flush()
 		}
 	}
 }

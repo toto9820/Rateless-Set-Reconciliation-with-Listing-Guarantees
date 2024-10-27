@@ -1,4 +1,4 @@
-package riblt_with_certainty_test
+package certainsync_test
 
 import (
 	"encoding/csv"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/riblt_with_certainty"
+	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
 // Define a struct to hold both SuccessRate and TotalCells

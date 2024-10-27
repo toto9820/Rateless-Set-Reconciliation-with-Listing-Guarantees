@@ -1,10 +1,11 @@
-package riblt_with_certainty
+package certainsync
 
 import "github.com/ethereum/go-ethereum/common"
 
 // SymbolHash is an interface that can be either a
 // common.Hash, uint64 or uint32.
 type Hash interface {
+	NewHash() Hash
 	Xor(Hash) Hash
 	IsZero() bool
 	Equal(Hash) bool
@@ -13,6 +14,10 @@ type Hash interface {
 // CommonHash wraps common.Hash to implement
 // the Hash interface
 type CommonHash common.Hash
+
+func (h CommonHash) NewHash() Hash {
+	return CommonHash{}
+}
 
 func (h CommonHash) Xor(other Hash) Hash {
 	o := other.(CommonHash)
@@ -36,6 +41,10 @@ func (h CommonHash) Equal(other Hash) bool {
 // the Hash interface
 type Uint64Hash uint64
 
+func (h Uint64Hash) NewHash() Hash {
+	return Uint64Hash(0)
+}
+
 func (h Uint64Hash) Xor(other Hash) Hash {
 	o := other.(Uint64Hash)
 	var result Uint64Hash
@@ -55,6 +64,10 @@ func (h Uint64Hash) Equal(other Hash) bool {
 // Uint32Hash wraps uint32 to implement
 // the Hash interface
 type Uint32Hash uint32
+
+func (h Uint32Hash) NewHash() Hash {
+	return Uint32Hash(0)
+}
 
 func (h Uint32Hash) Xor(other Hash) Hash {
 	o := other.(Uint32Hash)
