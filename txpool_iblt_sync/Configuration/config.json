@@ -1,4 +1,6 @@
 {
     "node1_ipc": "/data/data_Tomer/node1/geth.ipc",
-    "node2_ipc": "/data/data_Tomer/node2/geth.ipc"
+    "node2_ipc": "/data/data_Tomer/node2/geth.ipc",
+    "node1_hashes_file": "/home/tomer_local/Rateless-Set-Reconciliation-with-Listing-Guarantees/data/blockchain/node1/node1_txpool_hashes_1.csv",
+    "node2_hashes_file": "/home/tomer_local/Rateless-Set-Reconciliation-with-Listing-Guarantees/data/blockchain/node2/node1_txpool_hashes_2.csv"
 }

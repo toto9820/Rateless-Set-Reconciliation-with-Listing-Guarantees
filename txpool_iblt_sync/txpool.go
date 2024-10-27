@@ -4,12 +4,20 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
+)
+
+type MappingType string
+
+const (
+	EGH MappingType = "egh"
+	OLS MappingType = "ols"
 )
 
 // TxPoolContent represents the structure of the
@@ -35,7 +43,7 @@ func fetchTxPoolContent(client *rpc.Client, ctx context.Context) (TxPoolContent,
 
 // getTransactionHashes extracts transaction hashes
 // from the txpool data.
-func getTransactionHashes(txpoolData TxPoolContent) []Symbol {
+func getTransactionsHashes(txpoolData TxPoolContent) []Symbol {
 	var hashes []Symbol
 
 	// Collect pending transaction hashes
@@ -49,6 +57,42 @@ func getTransactionHashes(txpoolData TxPoolContent) []Symbol {
 	for _, txs := range txpoolData.Queued {
 		for _, tx := range txs {
 			hashes = append(hashes, HashSymbol(tx.Hash))
+		}
+	}
+
+	return hashes
+}
+
+func getTransactionsHashesFromFile(hashesFilePath string) []Symbol {
+	var hashes []Symbol
+
+	// Open the CSV file
+	file, err := os.Open(hashesFilePath)
+	if err != nil {
+		log.Fatalf("Failed to open file: %s", err)
+	}
+	defer file.Close()
+
+	// Create a CSV reader
+	reader := csv.NewReader(file)
+
+	// Read all lines from the CSV
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Fatalf("Failed to read CSV: %s", err)
+	}
+
+	for _, record := range records {
+		if len(record) > 0 {
+			// Parse the hash string from the record
+			// (one hash per line)
+			hashStr := record[0]
+
+			// Convert to common.Hash
+			hash := common.HexToHash(hashStr)
+
+			// Append to the slice
+			hashes = append(hashes, HashSymbol(hash))
 		}
 	}
 

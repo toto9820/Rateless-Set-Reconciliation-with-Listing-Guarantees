@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,8 +17,10 @@ import (
 
 // Config represents the structure of the configuration file.
 type Config struct {
-	Node1IPC string `json:"node1_ipc"`
-	Node2IPC string `json:"node2_ipc"`
+	Node1IPC       string `json:"node1_ipc"`
+	Node2IPC       string `json:"node2_ipc"`
+	Node1HashesDir string
+	Node2HashesDir string
 }
 
 // loadConfig loads the configuration from a JSON file.
@@ -53,6 +56,100 @@ func compareIBFs(hashes1, hashes2 []Symbol, initialCells uint64) (int, uint64) {
 			return len(symmetricDiff), ibfDiff.Size
 		}
 	}
+}
+
+// compareIBFsExtended generates IBFs for two sets of
+// transaction hashes, compares them, and finds the
+// symmetric difference. Returns symmetric difference size,
+// IBF size, and decoded elements in both directions (A\B and B\A)
+func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells uint64) (int, uint64) {
+	// Create working copies of the input slices
+	remainingHashes1 := make([]Symbol, len(originalHashes1))
+	remainingHashes2 := make([]Symbol, len(originalHashes2))
+	copy(remainingHashes1, originalHashes1)
+	copy(remainingHashes2, originalHashes2)
+
+	var allHashes1Not2, allHashes2Not1 []Symbol
+
+	for {
+		hashSeed := GenerateRandomSeed()
+		olsMapping := OLSMapping{Order: uint64(math.Pow(2, 32))}
+		var symmetricDiff []Symbol
+		var ok bool
+		var ibfDiff *ExtendedInvertibleBloomFilter
+
+		ibfNode1 := NewIBFExtended(initialCells, "hash", &olsMapping, hashSeed)
+		ibfNode2 := NewIBFExtended(initialCells, "hash", &olsMapping, hashSeed)
+
+		for {
+			ibfNode1.AddSymbols(remainingHashes1)
+			ibfNode2.AddSymbols(remainingHashes2)
+
+			// Subtract the two IBFs
+			ibfDiff = ibfNode1.Subtract(ibfNode2)
+			symmetricDiff, ok = ibfDiff.Decode()
+
+			if ok {
+				// If decoding fails, continue with same iteration
+				break
+			}
+		}
+
+		// Split the symmetric difference into 1\2 and 2\1
+		var hashes1Not2, hashes2Not1 []Symbol
+
+		// For each element in symmetric difference, check which set it belongs to
+		for _, hash := range symmetricDiff {
+			found := false
+			for _, h1 := range remainingHashes1 {
+				if hash == h1 {
+					hashes1Not2 = append(hashes1Not2, hash)
+					found = true
+					break
+				}
+			}
+			if !found {
+				hashes2Not1 = append(hashes2Not1, hash)
+			}
+		}
+
+		// Accumulate found differences
+		allHashes1Not2 = append(allHashes1Not2, hashes1Not2...)
+		allHashes2Not1 = append(allHashes2Not1, hashes2Not1...)
+
+		// Remove found elements from remaining hashes
+		remainingHashes1 = removeSymbols(remainingHashes1, hashes1Not2)
+		remainingHashes2 = removeSymbols(remainingHashes2, hashes2Not1)
+
+		// If both remaining sets are empty, we're done
+		if ibfDiff.IsFullyEmpty() {
+			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
+			return totalDiffSize, ibfDiff.Size
+		}
+	}
+}
+
+// removeSymbols removes the specified symbols from the source slice
+func removeSymbols(source []Symbol, toRemove []Symbol) []Symbol {
+	if len(toRemove) == 0 {
+		return source
+	}
+
+	// Create a map for quick lookup of symbols to remove
+	removeMap := make(map[Symbol]bool)
+	for _, sym := range toRemove {
+		removeMap[sym] = true
+	}
+
+	// Create new slice with non-removed elements
+	result := make([]Symbol, 0, len(source))
+	for _, sym := range source {
+		if !removeMap[sym] {
+			result = append(result, sym)
+		}
+	}
+
+	return result
 }
 
 // saveSymmetricDiffStatsToCSV saves the time,
@@ -98,7 +195,7 @@ func saveSymmetricDiffStatsToCSV(filePath string, iterationCount int, symDiffSiz
 	return nil
 }
 
-func main() {
+func txpool_sync() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get current working directory: %v", err)
@@ -158,8 +255,8 @@ func main() {
 			continue
 		}
 
-		hashes1 := getTransactionHashes(txpool1Data)
-		hashes2 := getTransactionHashes(txpool2Data)
+		hashes1 := getTransactionsHashes(txpool1Data)
+		hashes2 := getTransactionsHashes(txpool2Data)
 
 		// err = saveHashesToCSV(txpool1Data, "node1", node1Dir, iterationCount)
 		// if err != nil {
@@ -192,4 +289,10 @@ func main() {
 		// time.Sleep(10 * time.Second)
 		time.Sleep(time.Minute)
 	}
+}
+
+func main() {
+	// txpool_sync()
+
+	txpool_sync_from_file()
 }

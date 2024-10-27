@@ -31,12 +31,8 @@ type InvertibleBloomFilter struct {
 // ExtendedInvertibleBloomFilter represents the extended CertainSync
 // data structure
 type ExtendedInvertibleBloomFilter struct {
-	Cells         []Cell
-	Iteration     uint64
-	Size          uint64
-	SymbolType    string
-	MappingMethod MappingMethod
-	HashSeed      uint32
+	*InvertibleBloomFilter
+	HashSeed uint32
 }
 
 // NewIBF creates a new InvertibleBloomFilter instance
@@ -60,20 +56,18 @@ func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBl
 // NewIBF creates a new InvertibleBloomFilter instance
 // with cells of type ExtendedIBFCell.
 func NewIBFExtended(size uint64, symbolType string, mapping MappingMethod, hashSeed uint32) *ExtendedInvertibleBloomFilter {
+	ibf := NewIBF(size, symbolType, mapping)
+
 	cells := make([]Cell, size)
 
 	for i := range cells {
-		cells[i] = &ExtendedIBFCell{}
-		cells[i].Init()
+		ibf.Cells[i] = &ExtendedIBFCell{}
+		ibf.Cells[i].Init()
 	}
 
 	return &ExtendedInvertibleBloomFilter{
-		Cells:         cells,
-		Iteration:     0,
-		Size:          size,
-		SymbolType:    symbolType,
-		MappingMethod: mapping,
-		HashSeed:      hashSeed,
+		InvertibleBloomFilter: ibf,
+		HashSeed:              hashSeed,
 	}
 }
 
@@ -87,12 +81,7 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 }
 
 func (ibf *ExtendedInvertibleBloomFilter) Copy(ibf2 *ExtendedInvertibleBloomFilter) {
-	ibf.Cells = make([]Cell, len(ibf2.Cells))
-	copy(ibf.Cells, ibf2.Cells)
-	ibf.Iteration = ibf2.Iteration
-	ibf.Size = ibf2.Size
-	ibf.SymbolType = ibf2.SymbolType
-	ibf.MappingMethod = ibf2.MappingMethod
+	ibf.InvertibleBloomFilter = ibf2.InvertibleBloomFilter
 	ibf.HashSeed = ibf2.HashSeed
 }
 
@@ -124,6 +113,17 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
 
 func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *InvertibleBloomFilter {
 	difference := NewIBF(ibf.Size, ibf.SymbolType, ibf.MappingMethod)
+	difference.Copy(ibf)
+
+	for j := uint64(0); j < ibf.Size; j++ {
+		difference.Cells[j].Subtract(ibf2.Cells[j])
+	}
+
+	return difference
+}
+
+func (ibf *ExtendedInvertibleBloomFilter) Subtract(ibf2 *ExtendedInvertibleBloomFilter) *ExtendedInvertibleBloomFilter {
+	difference := NewIBFExtended(ibf.Size, ibf.SymbolType, ibf.MappingMethod, ibf.HashSeed)
 	difference.Copy(ibf)
 
 	for j := uint64(0); j < ibf.Size; j++ {
