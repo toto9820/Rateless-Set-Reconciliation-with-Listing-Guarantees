@@ -23,7 +23,7 @@ func txpool_sync_from_file_egh() {
 	node1Dir := config.Node1HashesDir
 	node2Dir := config.Node2HashesDir
 
-	symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", "file_symmetric_diff_stats.csv")
+	symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", "egh_file_symmetric_diff_stats.csv")
 
 	iterationCount := 0
 	maxIterations := 10
@@ -63,12 +63,12 @@ func txpool_sync_from_file_ols() {
 	node1Dir := config.Node1HashesDir
 	node2Dir := config.Node2HashesDir
 
-	symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", "file_symmetric_diff_stats.csv")
+	symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", "ols_file_symmetric_diff_stats.csv")
 
 	iterationCount := 0
 	maxIterations := 10
 	initialCells := uint64(1000)
-	universeSize := uint64(math.Pow(2, 32))
+	universeSize := uint64(math.Pow(2, 16))
 
 	for i := 0; i < maxIterations; i++ {
 		iterationCount++

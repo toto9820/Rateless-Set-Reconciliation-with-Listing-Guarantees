@@ -42,18 +42,7 @@ func loadConfig(filePath string) (*Config, error) {
 // transaction hashes, compares them, and finds the
 // symmetric difference.
 func compareIBFs(hashes1, hashes2 []Symbol, initialCells uint64) (int, uint64) {
-	var ibfNode1 *InvertibleBloomFilter
-	var ibfNode2 *InvertibleBloomFilter
-
-	// TODO - add support for mapping type to check both egh
-	// and ols and whether ols give same symmetric difference
-
-	// switch c.XorSum.(type) {
-	// case HashSymbol:
-	// 	c.XorSum = HashSymbol{}
-	// case Uint64Symbol:
-	// 	c.XorSum = Uint64Symbol(0)
-	// case Uint32Symbol
+	var ibfNode1, ibfNode2 *InvertibleBloomFilter
 
 	ibfNode1 = NewIBF(initialCells, "hash", &EGHMapping{})
 	ibfNode2 = NewIBF(initialCells, "hash", &EGHMapping{})
@@ -90,6 +79,7 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 		hashSeed := GenerateRandomSeed()
 		olsMapping := OLSMapping{Order: uint64(math.Sqrt(float64(universeSize)))}
 		var symmetricDiff []Symbol
+		var ok bool
 		var ibfDiff *InvertibleBloomFilter
 
 		// Hash each symbol to uint32 using murmur3 and remove
@@ -98,19 +88,19 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 		convertedHashes1, hashMap1 := uniqueHashedSymbolsWithMapping(remainingHashes1, hashSeed)
 		convertedHashes2, hashMap2 := uniqueHashedSymbolsWithMapping(remainingHashes2, hashSeed)
 
-		ibfNode1 := NewIBFExtended(initialCells, Uint32SymbolType, &olsMapping, hashSeed)
-		ibfNode2 := NewIBFExtended(initialCells, Uint32SymbolType, &olsMapping, hashSeed)
+		ibfNode1 := NewIBF(initialCells, Uint32SymbolType, &olsMapping)
+		ibfNode2 := NewIBF(initialCells, Uint32SymbolType, &olsMapping)
 
 		for {
-			ibfNode1.AddSymbols(convertedHashes1, hashMap1)
-			ibfNode2.AddSymbols(convertedHashes2, hashMap2)
+			ibfNode1.AddSymbols(convertedHashes1)
+			ibfNode2.AddSymbols(convertedHashes2)
 
 			// Subtract the two IBFs
 			ibfDiff = ibfNode1.Subtract(ibfNode2)
-			symmetricDiff, _ = ibfDiff.Decode()
+			symmetricDiff, ok = ibfDiff.Decode()
 
-			if len(symmetricDiff) > 0 {
-				// If decoding fails, continue to next iteration
+			// Checking if IBLT of symmmetric difference is empty
+			if ok {
 				break
 			}
 		}
@@ -144,10 +134,14 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 
 		totalCells += ibfDiff.Size
 
-		if ibfDiff.IsFullyEmpty() {
+		calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
+		calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
+
+		if calculatedHashes1Size == len(originalHashes1) {
 			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
 			return totalDiffSize, totalCells
 		}
+
 	}
 }
 
@@ -164,10 +158,13 @@ func uniqueHashedSymbolsWithMapping(symbols []Symbol, seed uint32) ([]Symbol, ma
 
 		// Hash with murmur3 to get a uint32 representation
 		hashedValue := murmur3.Sum32WithSeed(symBytes, seed)
-		hashedSymbol := Uint32Symbol(hashedValue)
+		// Extract the lower 16 bits
+		hashedValue16 := uint16(hashedValue & 0xFFFF)
+		// hashedSymbol := Uint32Symbol(hashedValue)
+		hashedSymbol := Uint32Symbol(hashedValue16)
 
 		// Check if this hashed symbol is already added
-		if !seen[hashedSymbol] {
+		if !seen[hashedSymbol] && hashedSymbol != 0 {
 			uniqueSymbols = append(uniqueSymbols, hashedSymbol)
 			// Store the original HashSymbol
 			symbolMap[hashedSymbol] = sym.(HashSymbol)
@@ -343,7 +340,7 @@ func txpool_sync() {
 func main() {
 	// txpool_sync()
 
-	txpool_sync_from_file_egh()
+	// txpool_sync_from_file_egh()
 
-	// txpool_sync_from_file_ols()
+	txpool_sync_from_file_ols()
 }
