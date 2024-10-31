@@ -1,4 +1,4 @@
-package riblt_with_certainty
+package certainsync
 
 import "github.com/kavehmz/prime"
 

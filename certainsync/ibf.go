@@ -1,38 +1,32 @@
-package riblt_with_certainty
+package certainsync
 
 import (
-	"github.com/ethereum/go-ethereum/common"
+	"errors"
 )
 
-type IBFCell struct {
-	Count   int64
-	XorSum  Symbol
-	HashSum common.Hash
-}
+// Common errors
+var (
+	ErrInvalidSymbolType = errors.New("invalid symbol type")
+	ErrSizeMismatch      = errors.New("IBF size mismatch")
+	ErrNilIBF            = errors.New("nil IBF reference")
+)
 
+// InvertibleBloomFilter represents the basic CertainSync
+// data structure
 type InvertibleBloomFilter struct {
 	Cells         []IBFCell
 	Iteration     uint64
 	Size          uint64
-	SymbolType    string        // "hash" or "uint64"
-	MappingMethod MappingMethod // "EGH", "OLS" or "Extended Hamming"
+	SymbolType    string
+	MappingMethod MappingMethod
 }
 
+// NewIBF creates a new InvertibleBloomFilter instance
 func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBloomFilter {
-	var zeroSymbol Symbol
-	switch symbolType {
-	case "hash":
-		zeroSymbol = HashSymbol{}
-	case "uint64":
-		zeroSymbol = Uint64Symbol(0)
-	default:
-		panic("Invalid symbol type")
-	}
-
 	cells := make([]IBFCell, size)
 
 	for i := range cells {
-		cells[i].XorSum = zeroSymbol
+		cells[i].Init(symbolType)
 	}
 
 	return &InvertibleBloomFilter{
@@ -46,54 +40,29 @@ func NewIBF(size uint64, symbolType string, mapping MappingMethod) *InvertibleBl
 
 func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 	ibf.Cells = make([]IBFCell, len(ibf2.Cells))
-	copy(ibf.Cells, ibf2.Cells)
+
+	for i := range ibf.Cells {
+		ibf.Cells[i].Init(ibf.SymbolType)
+		ibf.Cells[i].DeepCopy(ibf2.Cells[i])
+	}
+
 	ibf.Iteration = ibf2.Iteration
 	ibf.Size = ibf2.Size
 	ibf.SymbolType = ibf2.SymbolType
 	ibf.MappingMethod = ibf2.MappingMethod
 }
 
-func (c *IBFCell) Insert(s Symbol) {
-	c.Count++
-	c.XorSum = c.XorSum.Xor(s)
-	c.HashSum = XorBytes(c.HashSum, s.Hash())
-}
-
-func (c *IBFCell) Subtract(c2 *IBFCell) {
-	c.Count -= c2.Count
-	c.XorSum = c.XorSum.Xor(c2.XorSum)
-	c.HashSum = XorBytes(c.HashSum, c2.HashSum)
-}
-
-func (c *IBFCell) IsPure() bool {
-	return (c.Count == 1 || c.Count == -1) && c.HashSum == c.XorSum.Hash()
-}
-
-func (c *IBFCell) IsZero() bool {
-	return c.Count == 0 && c.XorSum.IsZero() && IsZeroBytes(c.HashSum)
-}
-
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
+	ibf.Iteration++
 	additionalCellsCount := ibf.MappingMethod.GetAdditionalCellsCount(ibf.SymbolType, ibf.Iteration)
 
 	if ibf.Size+additionalCellsCount > uint64(len(ibf.Cells)) {
-		newCapacity := len(ibf.Cells) * 2
+		newCapacity := ibf.Size + additionalCellsCount
 
 		newCells := make([]IBFCell, newCapacity)
 
-		var zeroSymbol Symbol
-
-		switch ibf.SymbolType {
-		case "hash":
-			zeroSymbol = HashSymbol{}
-		case "uint64":
-			zeroSymbol = Uint64Symbol(0)
-		default:
-			panic("Invalid symbol type")
-		}
-
 		for i := range newCells {
-			newCells[i].XorSum = zeroSymbol
+			newCells[i].Init(ibf.SymbolType)
 		}
 
 		copy(newCells, ibf.Cells)
@@ -101,13 +70,13 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []Symbol) {
 		ibf.Cells = newCells
 	}
 
+	// Add symbols to cells
 	for _, s := range symbols {
 		j := ibf.Size + ibf.MappingMethod.MapSymbol(s, ibf.Iteration)
 		ibf.Cells[j].Insert(s)
 	}
 
 	ibf.Size += additionalCellsCount
-	ibf.Iteration++
 }
 
 func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *InvertibleBloomFilter {
@@ -115,7 +84,7 @@ func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *Inverti
 	difference.Copy(ibf)
 
 	for j := uint64(0); j < ibf.Size; j++ {
-		difference.Cells[j].Subtract(&ibf2.Cells[j])
+		difference.Cells[j].Subtract(ibf2.Cells[j])
 	}
 
 	return difference
@@ -123,6 +92,8 @@ func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *Inverti
 
 func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 	pureList := make([]uint64, 0)
+	// Detecting duplicates
+	seenSymbols := make(map[Symbol]bool)
 
 	for {
 		n := len(pureList) - 1
@@ -146,20 +117,29 @@ func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 			continue
 		}
 
-		count := ibf.Cells[j].Count
-		xorSum := ibf.Cells[j].XorSum
+		xorSum := ibf.Cells[j].GetXorSum()
+
+		// Check for duplicates
+		if seenSymbols[xorSum] {
+			continue
+		}
 
 		symmetricDiff = append(symmetricDiff, xorSum)
+		seenSymbols[xorSum] = true
 
 		offset := uint64(0)
-		for i := uint64(0); i < ibf.Iteration; i++ {
+		for i := uint64(1); i <= ibf.Iteration; i++ {
 			cellIdx := offset + ibf.MappingMethod.MapSymbol(xorSum, i)
-			ibf.Cells[cellIdx].Count -= count
-			ibf.Cells[cellIdx].XorSum = ibf.Cells[cellIdx].XorSum.Xor(xorSum)
-			ibf.Cells[cellIdx].HashSum = XorBytes(ibf.Cells[cellIdx].HashSum, xorSum.Hash())
+
+			// Empty the pure cell at index j at the end
+			if cellIdx != j {
+				ibf.Cells[cellIdx].Subtract(ibf.Cells[j])
+			}
 
 			offset += ibf.MappingMethod.GetAdditionalCellsCount(ibf.SymbolType, i)
 		}
+
+		ibf.Cells[j].Subtract(ibf.Cells[j])
 	}
 
 	for j := uint64(0); j < ibf.Size; j++ {
@@ -171,4 +151,13 @@ func (ibf *InvertibleBloomFilter) Decode() (symmetricDiff []Symbol, ok bool) {
 
 	ok = true
 	return
+}
+
+// GetTransmittedBitsSize returns the bit size of the actively transmitted cells.
+// This reflects only the cells that have been added to the IBF and excludes unutilized cells.
+// Other field of the IBF are either private to him like iteration, or
+// agreed ahead like hash seed, mapping method with others.
+func (ibf *InvertibleBloomFilter) GetTransmittedBitsSize() uint64 {
+	cellSize := ibf.Cells[0].SizeInBits()
+	return ibf.Size * cellSize
 }
