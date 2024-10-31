@@ -16,7 +16,7 @@ import (
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
-func runTrialTotalCellsVsUniverseSize(trialNumber int,
+func runTrialTotalBitsVsUniverseSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSize int,
 	mappingType MappingType,
@@ -72,17 +72,17 @@ func runTrialTotalCellsVsUniverseSize(trialNumber int,
 		}
 
 		if len(bobWithoutAlice) == symmetricDiffSize {
-			cost = ibfDiff.Size
+			cost = ibfDiff.GetTransmittedBitsSize()
 			break
 		}
 	}
 
-	fmt.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d cells", trialNumber, symmetricDiffSize, cost)
+	fmt.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits", trialNumber, symmetricDiffSize, cost)
 	fmt.Println()
 
-	log.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d cells\n", trialNumber, symmetricDiffSize, cost)
+	log.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits\n", trialNumber, symmetricDiffSize, cost)
 
-	// Return number of coded symbols transmitted
+	// Return number of bits transmitted
 	return cost
 }
 
@@ -98,7 +98,6 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 		int(math.Pow(10, 7)), // 10,000,000
 	}
 
-	cellSizeInBits := 64 * 3
 	numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
@@ -120,7 +119,7 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 			for _, universeSize := range universeSizes {
 				b.Run(fmt.Sprintf("DiffSize=%d, Universe=%d", symmetricDiffSize, universeSize), func(b *testing.B) {
 					results := make(chan uint64, numTrials)
-					var totalCellsTransmitted uint64
+					var totalBitsTransmitted uint64
 
 					// Create a wait group to synchronize goroutines
 					var wg sync.WaitGroup
@@ -132,7 +131,7 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 							defer wg.Done()
 							// Create a local random number generator with a time-based seed
 							rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(trialNum)))
-							result := runTrialTotalCellsVsUniverseSize(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
+							result := runTrialTotalBitsVsUniverseSize(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
 							results <- result
 						}(i)
 					}
@@ -145,16 +144,16 @@ func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 
 					// Collect results
 					for result := range results {
-						totalCellsTransmitted += result
+						totalBitsTransmitted += result
 					}
 
-					averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
-					averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+					averageFloatBitsTransmitted := float64(totalBitsTransmitted) / float64(numTrials)
+					averageBitsTransmitted := int(math.Ceil(averageFloatBitsTransmitted))
 
 					// Write the result to the CSV file.
 					writer.Write([]string{
 						fmt.Sprintf("%d", universeSize),
-						fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+						fmt.Sprintf("%d", averageBitsTransmitted),
 					})
 				})
 			}

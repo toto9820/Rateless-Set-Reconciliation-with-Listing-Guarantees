@@ -15,14 +15,15 @@ import (
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
-// Define a struct to hold both SuccessRate and TotalCells
+// Define a struct to hold both SuccessRate and TotalBits
 type Result struct {
 	SuccessRate float64
-	TotalCells  int
+	TotalBits   int
 }
 
-// runTrialSuccessRateVsTotalCells simulates a reconciliation trial and computes the success rate vs. total cells.
-func runTrialSuccessRateVsTotalCells(trialNumber int,
+// runTrialSuccessRateVsTotalBits simulates a reconciliation trial
+// and computes the success rate vs. total bits transmitted.
+func runTrialSuccessRateVsTotalBits(trialNumber int,
 	universeSize int,
 	symmetricDiffSize int,
 	mappingType MappingType,
@@ -63,9 +64,9 @@ func runTrialSuccessRateVsTotalCells(trialNumber int,
 		ibfBob = NewIBF(initialCells, "uint64", &olsMapping)
 	}
 
-	// Initialize the results to store success rate vs. total cells
+	// Initialize the results to store success rate vs. total bits
 	results := []Result{}
-	totalCells := 0
+	totalBits := 0
 	curSymmetricDiffSize := 0
 
 	// Continue transmitting coded symbols until symmetricDiffSize elements are decoded
@@ -85,28 +86,29 @@ func runTrialSuccessRateVsTotalCells(trialNumber int,
 			// Append both success rate and total cells to results
 			results = append(results, Result{
 				SuccessRate: successRate,
-				TotalCells:  int(ibfDiff.Size),
+				TotalBits:   int(ibfDiff.GetTransmittedBitsSize()),
 			})
 
 			// Stop when success rate reaches 1.0
 			if successRate == 1.0 {
-				totalCells = int(ibfDiff.Size)
+				totalBits = int(ibfDiff.GetTransmittedBitsSize())
 				break
 			}
 		}
 	}
 
-	fmt.Printf("Trial %d with universe size %d for CertainSync IBLT, Symmetric Difference len: %d, Total Cells: %d\n", trialNumber, universeSize, symmetricDiffSize, totalCells)
-	log.Printf("Trial %d with universe size %d for CertainSync IBLT, Symmetric Difference len: %d, Total Cells: %d\n", trialNumber, universeSize, symmetricDiffSize, totalCells)
+	fmt.Printf("Trial %d with universe size %d for CertainSync IBLT, Symmetric Difference len: %d, Total Bits: %d\n", trialNumber, universeSize, symmetricDiffSize, totalBits)
+	log.Printf("Trial %d with universe size %d for CertainSync IBLT, Symmetric Difference len: %d, Total Bits: %d\n", trialNumber, universeSize, symmetricDiffSize, totalBits)
 
 	return results
 }
 
-// BenchmarkSuccessRateVsTotalBits benchmarks the reconciliation process with fixed universe size and varying symmetric difference sizes.
+// BenchmarkSuccessRateVsTotalBits benchmarks the
+// reconciliation process with fixed universe size and
+// varying symmetric difference sizes.
 func BenchmarkSuccessRateVsTotalBits(b *testing.B) {
 	symmetricDiffSizes := []int{1, 3, 30, 100, 300, 1000}
 	universeSize := int(math.Pow(10, 6))
-	cellSizeInBits := 64 * 3
 	numTrials := 10
 
 	mappingTypes := []MappingType{EGH, OLS}
@@ -136,7 +138,7 @@ func BenchmarkSuccessRateVsTotalBits(b *testing.B) {
 						defer wg.Done()
 						trialSeed := globalSeed + int64(trialNum) + rand.Int63()
 						rng := rand.New(rand.NewSource(trialSeed))
-						trialResults := runTrialSuccessRateVsTotalCells(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
+						trialResults := runTrialSuccessRateVsTotalBits(trialNum+1, universeSize, symmetricDiffSize, mappingType, rng)
 						results <- trialResults
 					}(i)
 				}
@@ -162,24 +164,24 @@ func BenchmarkSuccessRateVsTotalBits(b *testing.B) {
 					for j := 0; j < maxLength; j++ {
 						if j < len(results) {
 							avgResults[j].SuccessRate += results[j].SuccessRate
-							avgResults[j].TotalCells += results[j].TotalCells
+							avgResults[j].TotalBits += results[j].TotalBits
 						} else {
 							avgResults[j].SuccessRate += 1.0
-							avgResults[j].TotalCells += results[len(results)-1].TotalCells
+							avgResults[j].TotalBits += results[len(results)-1].TotalBits
 						}
 					}
 				}
 
 				for j := 0; j < maxLength; j++ {
 					avgResults[j].SuccessRate /= float64(numTrials)
-					avgResults[j].TotalCells = int(math.Ceil(float64(avgResults[j].TotalCells) / float64(numTrials)))
+					avgResults[j].TotalBits = int(math.Ceil(float64(avgResults[j].TotalBits) / float64(numTrials)))
 				}
 
 				writer.Write([]string{"0", "0.0000"})
 
 				for _, avgResult := range avgResults {
 					writer.Write([]string{
-						fmt.Sprintf("%d", avgResult.TotalCells*cellSizeInBits),
+						fmt.Sprintf("%d", avgResult.TotalBits),
 						fmt.Sprintf("%.4f", avgResult.SuccessRate),
 					})
 				}

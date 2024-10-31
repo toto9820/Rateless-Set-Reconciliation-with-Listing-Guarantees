@@ -213,3 +213,12 @@ func (ibf *InvertibleBloomFilter) IsFullyEmpty() bool {
 	}
 	return true
 }
+
+// GetTransmittedBitsSize returns the bit size of the actively transmitted cells.
+// This reflects only the cells that have been added to the IBF and excludes unutilized cells.
+// Other field of the IBF are either private to him like iteration, or
+// agreed ahead like hash seed, mapping method with others.
+func (ibf *InvertibleBloomFilter) GetTransmittedBitsSize() uint64 {
+	cellSize := ibf.Cells[0].GetTransmittedBitsSize()
+	return ibf.Size * cellSize
+}

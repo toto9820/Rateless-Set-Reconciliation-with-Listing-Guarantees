@@ -23,7 +23,7 @@ const (
 )
 
 // runTrial simulates a reconciliation trial for benchmarking.
-func runTrialTotalCellsVsDiffSize(trialNumber int,
+func runTrialTotalBitsVsDiffSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSize int,
 	mappingType MappingType,
@@ -82,14 +82,14 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 		}
 
 		if len(bobWithoutAlice) == symmetricDiffSize {
-			cost = ibfDiff.Size
+			cost = ibfDiff.GetTransmittedBitsSize()
 			break
 		}
 	}
 
-	fmt.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d cells\n",
+	fmt.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d bits\n",
 		trialNumber, mappingType, symmetricDiffSize, cost)
-	log.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d cells\n",
+	log.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d bits\n",
 		trialNumber, mappingType, symmetricDiffSize, cost)
 
 	return cost
@@ -107,11 +107,10 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		{10000},
 	}
 
-	cellSizeInBits := 64 * 3
 	universeSize := int(math.Pow(10, 6))
 	// For Debugging
-	// numTrials := 1
-	numTrials := 10
+	numTrials := 1
+	//numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
@@ -135,7 +134,7 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 				mappingType, universeSize, bench.symmetricDiffSize),
 				func(b *testing.B) {
 					results := make(chan uint64, numTrials)
-					var totalCellsTransmitted uint64
+					var totalBitsTransmitted uint64
 
 					var wg sync.WaitGroup
 					wg.Add(numTrials)
@@ -144,7 +143,7 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 						go func(trialNum int) {
 							defer wg.Done()
 							rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(trialNum)))
-							result := runTrialTotalCellsVsDiffSize(
+							result := runTrialTotalBitsVsDiffSize(
 								trialNum+1,
 								universeSize,
 								bench.symmetricDiffSize,
@@ -161,15 +160,15 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 					}()
 
 					for result := range results {
-						totalCellsTransmitted += result
+						totalBitsTransmitted += result
 					}
 
-					averageFloatCellsTransmitted := float64(totalCellsTransmitted) / float64(numTrials)
-					averageCellsTransmitted := int(math.Ceil(averageFloatCellsTransmitted))
+					averageFloatBitsTransmitted := float64(totalBitsTransmitted) / float64(numTrials)
+					averageBitsTransmitted := int(math.Ceil(averageFloatBitsTransmitted))
 
 					writer.Write([]string{
 						fmt.Sprintf("%d", bench.symmetricDiffSize),
-						fmt.Sprintf("%d", averageCellsTransmitted*cellSizeInBits),
+						fmt.Sprintf("%d", averageBitsTransmitted),
 					})
 				})
 		}

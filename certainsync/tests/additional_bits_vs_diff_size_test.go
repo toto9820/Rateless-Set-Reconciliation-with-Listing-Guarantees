@@ -14,8 +14,9 @@ import (
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
-// runTrialAdditionalCellsVsDiffSize simulates a reconciliation trial for benchmarking.
-func runTrialAdditionalCellsVsDiffSize(trialNumber int,
+// runTrialAdditionalCellsVsDiffSize simulates a
+// reconciliation trial for benchmarking.
+func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSizes []int,
 	mappingType MappingType,
@@ -84,8 +85,8 @@ func runTrialAdditionalCellsVsDiffSize(trialNumber int,
 
 			for (idx < len(symmetricDiffSizes)) &&
 				(curSymmetricDiffSize >= symmetricDiffSizes[idx]) {
-				results[idx] = int(ibfDiff.Size) - prevCellsSize
-				prevCellsSize = int(ibfDiff.Size)
+				results[idx] = int(ibfDiff.GetTransmittedBitsSize()) - prevCellsSize
+				prevCellsSize = int(ibfDiff.GetTransmittedBitsSize())
 
 				idx++
 			}
@@ -128,10 +129,9 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
 
 		numTrials := 10
-		cellSizeInBits := 64 * 3
 		universeSize := int(math.Pow(10, 6))
 
-		aggregatedAdditionalCells := make([]int64, len(symmetricDiffSizes))
+		aggregatedAdditionalBits := make([]int64, len(symmetricDiffSizes))
 		globalSeed := time.Now().UnixNano()
 
 		b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
@@ -145,7 +145,7 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 					defer wg.Done()
 					trialSeed := globalSeed + int64(trialNum) + rand.Int63()
 					rng := rand.New(rand.NewSource(trialSeed))
-					trialResults := runTrialAdditionalCellsVsDiffSize(trialNum+1, universeSize, symmetricDiffSizes, mappingType, rng)
+					trialResults := runTrialAdditionalBitsVsDiffSize(trialNum+1, universeSize, symmetricDiffSizes, mappingType, rng)
 					results <- trialResults
 				}(i)
 			}
@@ -157,16 +157,16 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 
 			for trialResult := range results {
 				for idx, additionalCells := range trialResult {
-					aggregatedAdditionalCells[idx] += int64(additionalCells)
+					aggregatedAdditionalBits[idx] += int64(additionalCells)
 				}
 			}
 		})
 
-		for idx, totalAdditionalCells := range aggregatedAdditionalCells {
-			avgAdditionalCells := int(math.Ceil(float64(totalAdditionalCells) / float64(numTrials)))
+		for idx, totalAdditionalBits := range aggregatedAdditionalBits {
+			avgAdditionalBits := int(math.Ceil(float64(totalAdditionalBits) / float64(numTrials)))
 			writer.Write([]string{
 				fmt.Sprintf("%d", symmetricDiffSizes[idx]),
-				fmt.Sprintf("%d", avgAdditionalCells*cellSizeInBits),
+				fmt.Sprintf("%d", avgAdditionalBits),
 			})
 		}
 	}

@@ -10,6 +10,7 @@ type Hash interface {
 	IsZero() bool
 	Equal(Hash) bool
 	DeepCopy() Hash
+	SizeInBits() uint64
 }
 
 // CommonHash wraps common.Hash to implement
@@ -49,6 +50,11 @@ func (h CommonHash) DeepCopy() Hash {
 	return CommonHash(newHash)
 }
 
+// Implement SizeInBits for CommonHash
+func (h CommonHash) SizeInBits() uint64 {
+	return 256 // common.Hash is 32 bytes or 256 bits
+}
+
 // Uint64Hash wraps uint64 to implement
 // the Hash interface
 type Uint64Hash uint64
@@ -78,6 +84,11 @@ func (h Uint64Hash) DeepCopy() Hash {
 	return Uint64Hash(uint64(h))
 }
 
+// Implement SizeInBits for Uint64Hash
+func (h Uint64Hash) SizeInBits() uint64 {
+	return 64 // Uint64Hash is 64 bits
+}
+
 // Uint32Hash wraps uint32 to implement
 // the Hash interface
 type Uint32Hash uint32
@@ -105,4 +116,9 @@ func (h Uint32Hash) Equal(other Hash) bool {
 // DeepCopy creates a deep copy of Uint32Hash
 func (h Uint32Hash) DeepCopy() Hash {
 	return Uint32Hash(uint32(h))
+}
+
+// Implement SizeInBits for Uint32Hash
+func (h Uint32Hash) SizeInBits() uint64 {
+	return 32 // Uint32Hash is 32 bits
 }

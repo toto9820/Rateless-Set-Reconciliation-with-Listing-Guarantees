@@ -12,6 +12,7 @@ type Cell interface {
 	IsZeroExtended() bool
 	GetXorSum() Symbol
 	DeepCopy(c2 Cell)
+	GetTransmittedBitsSize() uint64
 }
 
 // IBFCell represents a single cell in the Invertible Bloom Filter
@@ -88,6 +89,15 @@ func (c *IBFCell) DeepCopy(c2 Cell) {
 	c.HashSum = c2.(*IBFCell).HashSum.DeepCopy()
 }
 
+// GetTransmittedBitsSize calculates the size of the IBFCell in bits,
+// which is transmitted with all its fields.
+func (c *IBFCell) GetTransmittedBitsSize() uint64 {
+	size := uint64(64) // Count is an int64, so 64 bits
+	size += c.XorSum.SizeInBits()
+	size += c.HashSum.SizeInBits()
+	return size
+}
+
 // ExtendedIBFCell extends IBFCell with a full hash sum capability
 // for blockchain-specific applications
 type ExtendedIBFCell struct {
@@ -151,4 +161,15 @@ func (c *ExtendedIBFCell) DeepCopy(c2 Cell) {
 	c.HashSum = c2.(*ExtendedIBFCell).HashSum.DeepCopy()
 	c.Seed = c2.(*ExtendedIBFCell).Seed
 	c.FullXorSum = c2.(*ExtendedIBFCell).FullXorSum.DeepCopy().(HashSymbol)
+}
+
+// GetTransmittedBitsSize calculates the size of the ExtendedIBFCell
+// in bits, which is transmitted with all its fields except from seed
+// that is given in initialization once.
+func (c *ExtendedIBFCell) GetTransmittedBitsSize() uint64 {
+	size := c.IBFCell.GetTransmittedBitsSize()
+	// Seed is a uint32, so 32 bits
+	size += uint64(32)
+	size += c.FullXorSum.SizeInBits()
+	return size
 }

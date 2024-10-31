@@ -25,6 +25,7 @@ type Symbol interface {
 	Equal(Symbol) bool
 	ToBytes() []byte
 	DeepCopy() Symbol
+	SizeInBits() uint64
 }
 
 // HashSymbol wraps common.Hash to implement the Symbol interface
@@ -62,6 +63,11 @@ func (h HashSymbol) DeepCopy() Symbol {
 	return HashSymbol(h)
 }
 
+// Implement SizeInBits for HashSymbol
+func (h HashSymbol) SizeInBits() uint64 {
+	return 256 // common.Hash is 32 bytes or 256 bits
+}
+
 // Uint64Symbol wraps uint64 to implement the Symbol interface
 type Uint64Symbol uint64
 
@@ -95,6 +101,11 @@ func (u Uint64Symbol) ToBytes() []byte {
 // Implement DeepCopy for Uint64Symbol
 func (u Uint64Symbol) DeepCopy() Symbol {
 	return Uint64Symbol(u)
+}
+
+// Implement SizeInBits for Uint64Symbol
+func (u Uint64Symbol) SizeInBits() uint64 {
+	return 64 // Uint64Symbol is 64 bits
 }
 
 // Uint32Symbol wraps uint32 to implement the Symbol interface
@@ -138,4 +149,9 @@ func (u Uint32Symbol) ToBytes() []byte {
 // Implement DeepCopy for Uint32Symbol
 func (u Uint32Symbol) DeepCopy() Symbol {
 	return Uint32Symbol(u)
+}
+
+// Implement SizeInBits for Uint32Symbol
+func (u Uint32Symbol) SizeInBits() uint64 {
+	return 32 // Uint32Symbol is 32 bits
 }
