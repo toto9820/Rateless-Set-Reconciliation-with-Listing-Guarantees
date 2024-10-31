@@ -9,22 +9,26 @@ import (
 	"github.com/spaolacci/murmur3"
 )
 
+// Symbol types supported by the IBF
+const (
+	HashSymbolType   = "hash"
+	Uint64SymbolType = "uint64"
+	Uint32SymbolType = "uint32"
+)
+
 // Symbol is an interface that can be either a
 // common.Hash or a uint64 or uint32
 type Symbol interface {
-	NewSymbol() Symbol
 	Xor(Symbol) Symbol
 	Hash(seed ...uint32) Hash
 	IsZero() bool
 	Equal(Symbol) bool
+	ToBytes() []byte
+	DeepCopy() Symbol
 }
 
 // HashSymbol wraps common.Hash to implement the Symbol interface
 type HashSymbol common.Hash
-
-func (h HashSymbol) NewSymbol() Symbol {
-	return HashSymbol{}
-}
 
 func (h HashSymbol) Xor(other Symbol) Symbol {
 	o := other.(HashSymbol)
@@ -49,12 +53,17 @@ func (h HashSymbol) Equal(other Symbol) bool {
 	return h == o
 }
 
+func (h HashSymbol) ToBytes() []byte {
+	return h[:]
+}
+
+// Implement DeepCopy for HashSymbol
+func (h HashSymbol) DeepCopy() Symbol {
+	return HashSymbol(h)
+}
+
 // Uint64Symbol wraps uint64 to implement the Symbol interface
 type Uint64Symbol uint64
-
-func (h Uint64Symbol) NewSymbol() Symbol {
-	return Uint64Symbol(0)
-}
 
 func (u Uint64Symbol) Xor(other Symbol) Symbol {
 	o := other.(Uint64Symbol)
@@ -77,16 +86,23 @@ func (u Uint64Symbol) Equal(other Symbol) bool {
 	return u == o
 }
 
-// Uint64Symbol wraps uint64 to implement the Symbol interface
-type Uint32Symbol uint32
-
-func (h Uint32Symbol) NewSymbol() Symbol {
-	return Uint32Symbol(0)
+func (u Uint64Symbol) ToBytes() []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(u))
+	return buf
 }
+
+// Implement DeepCopy for Uint64Symbol
+func (u Uint64Symbol) DeepCopy() Symbol {
+	return Uint64Symbol(u)
+}
+
+// Uint32Symbol wraps uint32 to implement the Symbol interface
+type Uint32Symbol uint32
 
 func (u Uint32Symbol) Xor(other Symbol) Symbol {
 	o := other.(Uint32Symbol)
-	return Uint64Symbol(uint32(u) ^ uint32(o))
+	return Uint32Symbol(uint32(u) ^ uint32(o))
 }
 
 func (u Uint32Symbol) Hash(seed ...uint32) Hash {
@@ -111,4 +127,15 @@ func (u Uint32Symbol) IsZero() bool {
 func (u Uint32Symbol) Equal(other Symbol) bool {
 	o := other.(Uint32Symbol)
 	return u == o
+}
+
+func (u Uint32Symbol) ToBytes() []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(u))
+	return buf
+}
+
+// Implement DeepCopy for Uint32Symbol
+func (u Uint32Symbol) DeepCopy() Symbol {
+	return Uint32Symbol(u)
 }

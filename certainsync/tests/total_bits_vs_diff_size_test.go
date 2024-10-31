@@ -28,6 +28,10 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 	symmetricDiffSize int,
 	mappingType MappingType,
 	rng *rand.Rand) uint64 {
+
+	// For Debugging
+	// rng.Seed(0)
+
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
 	bob := make([]Symbol, 0, universeSize)
@@ -72,23 +76,6 @@ func runTrialTotalCellsVsDiffSize(trialNumber int,
 
 		ibfDiff := ibfBob.Subtract(ibfAlice)
 		bobWithoutAlice, ok := ibfDiff.Decode()
-
-		// occurrences := make(map[uint64]bool)
-		// hasDuplicates := false
-
-		// for _, value := range bobWithoutAlice {
-		// 	// Check if value already exists in the occurrences map
-		// 	if occurrences[uint64(value.(Uint64Symbol))] {
-		// 		fmt.Printf("Duplicate found: %d\n", value)
-		// 		hasDuplicates = true
-		// 	} else {
-		// 		occurrences[uint64(value.(Uint64Symbol))] = true
-		// 	}
-		// }
-
-		// if !hasDuplicates {
-		// 	fmt.Println("No duplicates found.")
-		// }
 
 		if ok == false {
 			continue

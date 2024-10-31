@@ -9,6 +9,7 @@ type Hash interface {
 	Xor(Hash) Hash
 	IsZero() bool
 	Equal(Hash) bool
+	DeepCopy() Hash
 }
 
 // CommonHash wraps common.Hash to implement
@@ -37,6 +38,17 @@ func (h CommonHash) Equal(other Hash) bool {
 	return h == o
 }
 
+// DeepCopy creates a deep copy of CommonHash
+func (h CommonHash) DeepCopy() Hash {
+	if h.IsZero() {
+		return CommonHash{}
+	}
+
+	newHash := make([]byte, common.HashLength)
+	copy(newHash, h[:])
+	return CommonHash(newHash)
+}
+
 // Uint64Hash wraps uint64 to implement
 // the Hash interface
 type Uint64Hash uint64
@@ -61,6 +73,11 @@ func (h Uint64Hash) Equal(other Hash) bool {
 	return h == o
 }
 
+// DeepCopy creates a deep copy of Uint64Hash
+func (h Uint64Hash) DeepCopy() Hash {
+	return Uint64Hash(uint64(h))
+}
+
 // Uint32Hash wraps uint32 to implement
 // the Hash interface
 type Uint32Hash uint32
@@ -83,4 +100,9 @@ func (h Uint32Hash) IsZero() bool {
 func (h Uint32Hash) Equal(other Hash) bool {
 	o := other.(Uint32Hash)
 	return h == o
+}
+
+// DeepCopy creates a deep copy of Uint32Hash
+func (h Uint32Hash) DeepCopy() Hash {
+	return Uint32Hash(uint32(h))
 }

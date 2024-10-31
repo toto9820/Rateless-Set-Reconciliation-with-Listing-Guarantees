@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/spaolacci/murmur3"
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
@@ -19,8 +20,8 @@ import (
 type Config struct {
 	Node1IPC       string `json:"node1_ipc"`
 	Node2IPC       string `json:"node2_ipc"`
-	Node1HashesDir string
-	Node2HashesDir string
+	Node1HashesDir string `json:"node1_hashes_dir"`
+	Node2HashesDir string `json:"node2_hashes_dir"`
 }
 
 // loadConfig loads the configuration from a JSON file.
@@ -41,8 +42,21 @@ func loadConfig(filePath string) (*Config, error) {
 // transaction hashes, compares them, and finds the
 // symmetric difference.
 func compareIBFs(hashes1, hashes2 []Symbol, initialCells uint64) (int, uint64) {
-	ibfNode1 := NewIBF(initialCells, "hash", &EGHMapping{})
-	ibfNode2 := NewIBF(initialCells, "hash", &EGHMapping{})
+	var ibfNode1 *InvertibleBloomFilter
+	var ibfNode2 *InvertibleBloomFilter
+
+	// TODO - add support for mapping type to check both egh
+	// and ols and whether ols give same symmetric difference
+
+	// switch c.XorSum.(type) {
+	// case HashSymbol:
+	// 	c.XorSum = HashSymbol{}
+	// case Uint64Symbol:
+	// 	c.XorSum = Uint64Symbol(0)
+	// case Uint32Symbol
+
+	ibfNode1 = NewIBF(initialCells, "hash", &EGHMapping{})
+	ibfNode2 = NewIBF(initialCells, "hash", &EGHMapping{})
 
 	for {
 		ibfNode1.AddSymbols(hashes1)
@@ -62,7 +76,7 @@ func compareIBFs(hashes1, hashes2 []Symbol, initialCells uint64) (int, uint64) {
 // transaction hashes, compares them, and finds the
 // symmetric difference. Returns symmetric difference size,
 // IBF size, and decoded elements in both directions (A\B and B\A)
-func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells uint64) (int, uint64) {
+func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells uint64, universeSize uint64) (int, uint64) {
 	// Create working copies of the input slices
 	remainingHashes1 := make([]Symbol, len(originalHashes1))
 	remainingHashes2 := make([]Symbol, len(originalHashes2))
@@ -70,27 +84,33 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 	copy(remainingHashes2, originalHashes2)
 
 	var allHashes1Not2, allHashes2Not1 []Symbol
+	var totalCells uint64 = 0
 
 	for {
 		hashSeed := GenerateRandomSeed()
-		olsMapping := OLSMapping{Order: uint64(math.Pow(2, 32))}
+		olsMapping := OLSMapping{Order: uint64(math.Sqrt(float64(universeSize)))}
 		var symmetricDiff []Symbol
-		var ok bool
-		var ibfDiff *ExtendedInvertibleBloomFilter
+		var ibfDiff *InvertibleBloomFilter
 
-		ibfNode1 := NewIBFExtended(initialCells, "hash", &olsMapping, hashSeed)
-		ibfNode2 := NewIBFExtended(initialCells, "hash", &olsMapping, hashSeed)
+		// Hash each symbol to uint32 using murmur3 and remove
+		// duplicates for the next iteration
+		// Maps to convert uint32 hash back to original 256-bit hash
+		convertedHashes1, hashMap1 := uniqueHashedSymbolsWithMapping(remainingHashes1, hashSeed)
+		convertedHashes2, hashMap2 := uniqueHashedSymbolsWithMapping(remainingHashes2, hashSeed)
+
+		ibfNode1 := NewIBFExtended(initialCells, Uint32SymbolType, &olsMapping, hashSeed)
+		ibfNode2 := NewIBFExtended(initialCells, Uint32SymbolType, &olsMapping, hashSeed)
 
 		for {
-			ibfNode1.AddSymbols(remainingHashes1)
-			ibfNode2.AddSymbols(remainingHashes2)
+			ibfNode1.AddSymbols(convertedHashes1, hashMap1)
+			ibfNode2.AddSymbols(convertedHashes2, hashMap2)
 
 			// Subtract the two IBFs
 			ibfDiff = ibfNode1.Subtract(ibfNode2)
-			symmetricDiff, ok = ibfDiff.Decode()
+			symmetricDiff, _ = ibfDiff.Decode()
 
-			if ok {
-				// If decoding fails, continue with same iteration
+			if len(symmetricDiff) > 0 {
+				// If decoding fails, continue to next iteration
 				break
 			}
 		}
@@ -98,18 +118,19 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 		// Split the symmetric difference into 1\2 and 2\1
 		var hashes1Not2, hashes2Not1 []Symbol
 
-		// For each element in symmetric difference, check which set it belongs to
+		// For each element in symmetric difference, check
+		// which set it belongs to
 		for _, hash := range symmetricDiff {
 			found := false
-			for _, h1 := range remainingHashes1 {
+			for _, h1 := range convertedHashes1 {
 				if hash == h1 {
-					hashes1Not2 = append(hashes1Not2, hash)
+					hashes1Not2 = append(hashes1Not2, hashMap1[hash.(Uint32Symbol)])
 					found = true
 					break
 				}
 			}
 			if !found {
-				hashes2Not1 = append(hashes2Not1, hash)
+				hashes2Not1 = append(hashes2Not1, hashMap2[hash.(Uint32Symbol)])
 			}
 		}
 
@@ -121,12 +142,40 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 		remainingHashes1 = removeSymbols(remainingHashes1, hashes1Not2)
 		remainingHashes2 = removeSymbols(remainingHashes2, hashes2Not1)
 
-		// If both remaining sets are empty, we're done
+		totalCells += ibfDiff.Size
+
 		if ibfDiff.IsFullyEmpty() {
 			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
-			return totalDiffSize, ibfDiff.Size
+			return totalDiffSize, totalCells
 		}
 	}
+}
+
+// uniqueHashedSymbolsWithMapping hashes each Symbol to a Uint32Symbol with the given seed,
+// removes duplicates, and returns the hashed symbols along with a map to convert back to the original hashes.
+func uniqueHashedSymbolsWithMapping(symbols []Symbol, seed uint32) ([]Symbol, map[Symbol]Symbol) {
+	uniqueSymbols := make([]Symbol, 0)
+	symbolMap := make(map[Symbol]Symbol)
+	seen := make(map[Uint32Symbol]bool)
+
+	for _, sym := range symbols {
+		// Convert each Symbol to its byte representation for hashing
+		symBytes := sym.ToBytes()
+
+		// Hash with murmur3 to get a uint32 representation
+		hashedValue := murmur3.Sum32WithSeed(symBytes, seed)
+		hashedSymbol := Uint32Symbol(hashedValue)
+
+		// Check if this hashed symbol is already added
+		if !seen[hashedSymbol] {
+			uniqueSymbols = append(uniqueSymbols, hashedSymbol)
+			// Store the original HashSymbol
+			symbolMap[hashedSymbol] = sym.(HashSymbol)
+			seen[hashedSymbol] = true
+		}
+	}
+
+	return uniqueSymbols, symbolMap
 }
 
 // removeSymbols removes the specified symbols from the source slice
@@ -294,5 +343,7 @@ func txpool_sync() {
 func main() {
 	// txpool_sync()
 
-	txpool_sync_from_file()
+	txpool_sync_from_file_egh()
+
+	// txpool_sync_from_file_ols()
 }

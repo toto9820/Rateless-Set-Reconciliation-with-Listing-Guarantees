@@ -3,13 +3,15 @@ package certainsync
 // Cell is an interface that can be either an IBFCell
 // or an ExtendedIBFCell
 type Cell interface {
-	Init(seed ...uint32)
-	Insert(s Symbol)
-	Subtract(c Cell)
+	Init(symbolType string, seed ...uint32)
+	Insert(s Symbol, orgSymbol ...Symbol)
+	Subtract(c2 Cell)
+	IsExtended() bool
 	IsPure() bool
 	IsZero() bool
 	IsZeroExtended() bool
 	GetXorSum() Symbol
+	DeepCopy(c2 Cell)
 }
 
 // IBFCell represents a single cell in the Invertible Bloom Filter
@@ -20,14 +22,26 @@ type IBFCell struct {
 }
 
 // Init assign defualt values to cell's fields
-func (c *IBFCell) Init(seed ...uint32) {
+func (c *IBFCell) Init(symbolType string, seed ...uint32) {
 	c.Count = 0
-	c.XorSum = c.XorSum.NewSymbol()
-	c.HashSum = c.HashSum.NewHash()
+
+	switch symbolType {
+	case HashSymbolType:
+		c.XorSum = HashSymbol{}
+	case Uint64SymbolType:
+		c.XorSum = Uint64Symbol(0)
+	case Uint32SymbolType:
+		c.XorSum = Uint32Symbol(0)
+	default:
+		// Handle an unexpected type if necessary
+		panic("unsupported Symbol type")
+	}
+
+	c.HashSum = c.XorSum.Hash()
 }
 
 // Insert adds a symbol to the cell
-func (c *IBFCell) Insert(s Symbol) {
+func (c *IBFCell) Insert(s Symbol, orgSymbol ...Symbol) {
 	c.Count++
 	c.XorSum = c.XorSum.Xor(s)
 	c.HashSum = c.HashSum.Xor(s.Hash())
@@ -39,6 +53,11 @@ func (c *IBFCell) Subtract(c2 Cell) {
 	c.Count -= cell.Count
 	c.XorSum = c.XorSum.Xor(cell.XorSum)
 	c.HashSum = c.HashSum.Xor(cell.HashSum)
+}
+
+// IsExtended checks if the cell is extended type
+func (c *IBFCell) IsExtended() bool {
+	return false
 }
 
 // IsPure checks if the cell contains exactly one element
@@ -63,6 +82,12 @@ func (c *IBFCell) GetXorSum() Symbol {
 	return c.XorSum
 }
 
+func (c *IBFCell) DeepCopy(c2 Cell) {
+	c.Count = c2.(*IBFCell).Count
+	c.XorSum = c2.(*IBFCell).XorSum.DeepCopy()
+	c.HashSum = c2.(*IBFCell).HashSum.DeepCopy()
+}
+
 // ExtendedIBFCell extends IBFCell with a full hash sum capability
 // for blockchain-specific applications
 type ExtendedIBFCell struct {
@@ -72,25 +97,30 @@ type ExtendedIBFCell struct {
 }
 
 // Init assign defualt values to extended cell's fields
-func (c *ExtendedIBFCell) Init(seed ...uint32) {
-	c.IBFCell.Init()
+func (c *ExtendedIBFCell) Init(symbolType string, seed ...uint32) {
+	c.IBFCell.Init(symbolType, seed...)
 	c.Seed = seed[0]
 	c.FullXorSum = HashSymbol{}
 }
 
 // Insert adds a symbol to the extended cell, including FullXorSum
-func (c *ExtendedIBFCell) Insert(s Symbol) {
+func (c *ExtendedIBFCell) Insert(s Symbol, orgSymbol ...Symbol) {
 	c.Count++
 	c.XorSum = c.XorSum.Xor(s)
 	c.HashSum = c.HashSum.Xor(s.Hash(c.Seed))
-	c.FullXorSum = c.FullXorSum.Xor(s).(HashSymbol)
+	c.FullXorSum = c.FullXorSum.Xor(orgSymbol[0]).(HashSymbol)
 }
 
 // Subtract removes another cell's contents from this extended cell
 func (c *ExtendedIBFCell) Subtract(c2 Cell) {
 	cell := c2.(*ExtendedIBFCell)
-	c.IBFCell.Subtract(cell)
+	c.IBFCell.Subtract(&cell.IBFCell)
 	c.FullXorSum = c.FullXorSum.Xor(cell.FullXorSum).(HashSymbol)
+}
+
+// IsExtended checks if the cell is extended type
+func (c *ExtendedIBFCell) IsExtended() bool {
+	return true
 }
 
 // IsPure checks if the extended cell contains exactly one element
@@ -113,4 +143,12 @@ func (c *ExtendedIBFCell) IsZeroExtended() bool {
 // GetXorSum is a getter of XorSum field of ExtendedIBFCell
 func (c *ExtendedIBFCell) GetXorSum() Symbol {
 	return c.XorSum
+}
+
+func (c *ExtendedIBFCell) DeepCopy(c2 Cell) {
+	c.Count = c2.(*ExtendedIBFCell).Count
+	c.XorSum = c2.(*ExtendedIBFCell).XorSum.DeepCopy()
+	c.HashSum = c2.(*ExtendedIBFCell).HashSum.DeepCopy()
+	c.Seed = c2.(*ExtendedIBFCell).Seed
+	c.FullXorSum = c2.(*ExtendedIBFCell).FullXorSum.DeepCopy().(HashSymbol)
 }
