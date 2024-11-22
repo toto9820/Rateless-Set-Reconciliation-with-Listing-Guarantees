@@ -9,7 +9,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
->>>>>>> universe_reduce_sync
 // Common errors
 var (
 	ErrInvalidSymbolType = errors.New("invalid symbol type")
