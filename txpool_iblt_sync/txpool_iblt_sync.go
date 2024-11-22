@@ -42,12 +42,24 @@ func loadConfig(filePath string) (*Config, error) {
 // certainSync generates IBFs for two sets of
 // transaction hashes, compares them, and finds the
 // symmetric difference.
-func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (int, uint64) {
+func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int, mappingType MappingType) (int, uint64) {
 	var ibfNode1, ibfNode2, receivedCells *InvertibleBloomFilter
 
-	ibfNode1 = NewIBF(universeSize, &EGHMapping{})
-	ibfNode2 = NewIBF(universeSize, &EGHMapping{})
-	receivedCells = NewIBF(universeSize, &EGHMapping{})
+	var mapping MappingMethod
+	switch mappingType {
+	case EGH:
+		mapping = &EGHMapping{}
+	case OLS:
+		mapping = &OLSMapping{
+			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize.Uint64())))),
+		}
+	default:
+		panic("unsupported mapping type")
+	}
+
+	ibfNode1 = NewIBF(universeSize, mapping)
+	ibfNode2 = NewIBF(universeSize, mapping)
+	receivedCells = NewIBF(universeSize, mapping)
 
 	transmittedBits := uint64(0)
 
@@ -431,6 +443,8 @@ func txpool_sync() {
 
 	iterationCount := 0
 
+	// mappingTypes := []MappingType{EGH, OLS}
+
 	for time.Now().Before(endTime) {
 		iterationCount++
 
@@ -473,7 +487,8 @@ func txpool_sync() {
 		// relevant only for egh for now (ols universe reduction)
 		universeSize := uint256.NewInt(0).SetAllOne()
 
-		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize)
+		// TODO - fix later to support other mapping types.
+		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize, EGH)
 		fmt.Printf("Iteration %d: Symmetric Difference: %d\n", iterationCount, symDiffSize)
 
 		err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
