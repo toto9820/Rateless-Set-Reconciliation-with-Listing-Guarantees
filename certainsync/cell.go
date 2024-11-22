@@ -1,50 +1,80 @@
 package certainsync
 
-// Cell is an interface that can be either an IBFCell
-// or an ExtendedIBFCell
-type Cell interface {
-	Init(seed ...uint32)
-	Insert(s Symbol)
-	Subtract(c Cell)
-	IsPure() bool
-	IsZero() bool
-	IsZeroExtended() bool
-	GetXorSum() Symbol
-}
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 
-// IBFCell represents a single cell in the Invertible Bloom Filter
+	"github.com/holiman/uint256"
+)
+
+// IBFCell represents a single cell in the Invertible Bloom Filter.
+// It maintains count, XOR sum of elements, and hash sum for verification.
 type IBFCell struct {
 	Count   int64
-	XorSum  Symbol
-	HashSum Hash
+	XorSum  *uint256.Int
+	HashSum *uint256.Int
+	Hasher  CellHasher
 }
 
-// Init assign defualt values to cell's fields
-func (c *IBFCell) Init(seed ...uint32) {
-	c.Count = 0
-	c.XorSum = c.XorSum.NewSymbol()
-	c.HashSum = c.HashSum.NewHash()
+// NewIBFCell creates a new initialized IBFCell with
+// appropriate hasher based on universe size
+func NewIBFCell(universeSize *uint256.Int) IBFCell {
+	cell := IBFCell{
+		Count:   0,
+		XorSum:  uint256.NewInt(0),
+		HashSum: uint256.NewInt(0),
+	}
+	cell.setHasher(universeSize)
+	// cell.HashSum = cell.Hasher.Hash(nil)
+	return cell
+}
+
+// setHasher selects appropriate hash function based on universe size
+// to maintain collision probability below 0.1%:
+// 1 - e^(-n(n-1)/(2*m)) < 0.001
+func (c *IBFCell) setHasher(universeSize *uint256.Int) {
+	threshold1 := uint256.NewInt(2500)
+	threshold2 := uint256.NewInt(150_000_000)
+
+	switch {
+	case universeSize.Cmp(threshold1) < 0:
+		c.Hasher = Murmur3Hash{}
+	case universeSize.Cmp(threshold2) < 0:
+		c.Hasher = XXHash64Hash{}
+	default:
+		c.Hasher = Sha256Hash{}
+	}
 }
 
 // Insert adds a symbol to the cell
-func (c *IBFCell) Insert(s Symbol) {
+func (c *IBFCell) Insert(s *uint256.Int) {
+	if s == nil {
+		return
+	}
 	c.Count++
-	c.XorSum = c.XorSum.Xor(s)
-	c.HashSum = c.HashSum.Xor(s.Hash())
+	c.XorSum.Xor(c.XorSum, s)
+
+	symbolHash := c.Hasher.Hash(s.Bytes())
+	c.HashSum.Xor(c.HashSum, symbolHash)
 }
 
 // Subtract removes another cell's contents from this cell
-func (c *IBFCell) Subtract(c2 Cell) {
-	cell := c2.(*IBFCell)
-	c.Count -= cell.Count
-	c.XorSum = c.XorSum.Xor(cell.XorSum)
-	c.HashSum = c.HashSum.Xor(cell.HashSum)
+func (c *IBFCell) Subtract(other IBFCell) {
+	c.Count -= other.Count
+	c.XorSum.Xor(c.XorSum, other.XorSum)
+	c.HashSum.Xor(c.HashSum, other.HashSum)
 }
 
-// IsPure checks if the cell contains exactly one element
+// IsPure checks if the cell contains exactly one element by verifying
+// the count is ±1 and the hash sum matches the computed hash of XorSum
 func (c *IBFCell) IsPure() bool {
-	return (c.Count == 1 || c.Count == -1) &&
-		c.HashSum == c.XorSum.Hash()
+	if c.Count != 1 && c.Count != -1 {
+		return false
+	}
+
+	calcHashSum := c.Hasher.Hash(c.XorSum.Bytes())
+	return c.HashSum.Cmp(calcHashSum) == 0
 }
 
 // IsZero checks if the cell is empty
@@ -54,63 +84,105 @@ func (c *IBFCell) IsZero() bool {
 		c.HashSum.IsZero()
 }
 
-func (c *IBFCell) IsZeroExtended() bool {
-	return c.IsZero()
+// GetXorSum returns a copy of the XorSum to prevent external modification
+func (c *IBFCell) GetXorSum() *uint256.Int {
+	return uint256.NewInt(0).Set(c.XorSum)
 }
 
-// GetXorSum is a getter of XorSum field of IBFCell
-func (c *IBFCell) GetXorSum() Symbol {
-	return c.XorSum
+// Clone creates a deep copy of the cell
+func (c *IBFCell) Clone() IBFCell {
+	return IBFCell{
+		Count:   c.Count,
+		XorSum:  uint256.NewInt(0).Set(c.XorSum),
+		HashSum: uint256.NewInt(0).Set(c.HashSum),
+		Hasher:  c.Hasher,
+	}
 }
 
-// ExtendedIBFCell extends IBFCell with a full hash sum capability
-// for blockchain-specific applications
-type ExtendedIBFCell struct {
-	IBFCell
-	Seed       uint32
-	FullXorSum HashSymbol
+// ByteLen returns the total size of the cell in bytes, which
+// corresponds to the size of the cell when serialized.
+func (c *IBFCell) ByteLen() uint8 {
+	return 8 + // Count (int64)
+		uint8(c.XorSum.ByteLen()) +
+		uint8(c.HashSum.ByteLen())
 }
 
-// Init assign defualt values to extended cell's fields
-func (c *ExtendedIBFCell) Init(seed ...uint32) {
-	c.IBFCell.Init()
-	c.Seed = seed[0]
-	c.FullXorSum = HashSymbol{}
+// BitsLen returns the total size of the cell in bits, which
+// corresponds to the size of the cell when serialized
+func (c *IBFCell) BitsLen() uint64 {
+	return uint64(c.ByteLen()) * 8
 }
 
-// Insert adds a symbol to the extended cell, including FullXorSum
-func (c *ExtendedIBFCell) Insert(s Symbol) {
-	c.Count++
-	c.XorSum = c.XorSum.Xor(s)
-	c.HashSum = c.HashSum.Xor(s.Hash(c.Seed))
-	c.FullXorSum = c.FullXorSum.Xor(s).(HashSymbol)
+func (c *IBFCell) Serialize() ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Serialize the Count as int64 (8 bytes)
+	if err := binary.Write(&buf, binary.LittleEndian, c.Count); err != nil {
+		return nil, fmt.Errorf("failed to write Count: %v", err)
+	}
+
+	// Serialize XorSum (byte slice)
+	var xorSumLen uint8 = uint8(c.XorSum.ByteLen())
+
+	if err := binary.Write(&buf, binary.LittleEndian, xorSumLen); err != nil {
+		return nil, fmt.Errorf("failed to write XorSum length: %v", err)
+	}
+
+	xorSumBytes := c.XorSum.Bytes()
+
+	if err := binary.Write(&buf, binary.LittleEndian, xorSumBytes); err != nil {
+		return nil, fmt.Errorf("failed to write XorSum: %v", err)
+	}
+
+	// Serialize HashSum (byte slice)
+
+	var hashSumLen uint8 = uint8(c.HashSum.ByteLen())
+
+	if err := binary.Write(&buf, binary.LittleEndian, hashSumLen); err != nil {
+		return nil, fmt.Errorf("failed to write HashSum length: %v", err)
+	}
+
+	hashSumBytes := c.HashSum.Bytes()
+
+	if err := binary.Write(&buf, binary.LittleEndian, hashSumBytes); err != nil {
+		return nil, fmt.Errorf("failed to write HashSum: %v", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
-// Subtract removes another cell's contents from this extended cell
-func (c *ExtendedIBFCell) Subtract(c2 Cell) {
-	cell := c2.(*ExtendedIBFCell)
-	c.IBFCell.Subtract(cell)
-	c.FullXorSum = c.FullXorSum.Xor(cell.FullXorSum).(HashSymbol)
-}
+// Deserialize converts a byte slice back into an IBFCell object
+func (c *IBFCell) Deserialize(data []byte) error {
+	buf := bytes.NewBuffer(data)
 
-// IsPure checks if the extended cell contains exactly one element
-func (c *ExtendedIBFCell) IsPure() bool {
-	return (c.Count == 1 || c.Count == -1) &&
-		c.HashSum == c.XorSum.Hash(c.Seed)
-}
+	// Deserialize the Count field
+	if err := binary.Read(buf, binary.LittleEndian, &c.Count); err != nil {
+		return fmt.Errorf("failed to read Count: %v", err)
+	}
 
-// IsZero checks if the extended cell is empty
-func (c *ExtendedIBFCell) IsZero() bool {
-	return c.IBFCell.IsZero()
-}
+	// Deserialize the XorSum field as a byte slice
+	var xorSumLen uint8
+	if err := binary.Read(buf, binary.LittleEndian, &xorSumLen); err != nil {
+		return fmt.Errorf("failed to read XorSum length: %v", err)
+	}
 
-// IsZeroExtended checks if the extended cell is empty,
-// including its extra FullXorSum field.
-func (c *ExtendedIBFCell) IsZeroExtended() bool {
-	return c.IsZero() && c.FullXorSum.IsZero()
-}
+	xorSumBytes := make([]byte, xorSumLen)
+	if err := binary.Read(buf, binary.LittleEndian, &xorSumBytes); err != nil {
+		return fmt.Errorf("failed to read XorSum: %v", err)
+	}
+	c.XorSum = uint256.NewInt(0).SetBytes(xorSumBytes)
 
-// GetXorSum is a getter of XorSum field of ExtendedIBFCell
-func (c *ExtendedIBFCell) GetXorSum() Symbol {
-	return c.XorSum
+	// Deserialize the HashSum field as a byte slice
+	var hashSumLen uint8
+	if err := binary.Read(buf, binary.LittleEndian, &hashSumLen); err != nil {
+		return fmt.Errorf("failed to read HashSum length: %v", err)
+	}
+
+	hashSumBytes := make([]byte, hashSumLen)
+	if err := binary.Read(buf, binary.LittleEndian, &hashSumBytes); err != nil {
+		return fmt.Errorf("failed to read HashSum: %v", err)
+	}
+	c.HashSum = uint256.NewInt(0).SetBytes(hashSumBytes)
+
+	return nil
 }

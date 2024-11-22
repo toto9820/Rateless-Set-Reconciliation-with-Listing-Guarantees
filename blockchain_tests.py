@@ -1,4 +1,5 @@
 import time
+import pandas as pd
 import matplotlib.pyplot as plt
 from web3 import Web3
 from datetime import datetime
@@ -190,11 +191,33 @@ def integration_test():
 
     print("Graphs have been saved as PNG files.")
 
+def files_testing():
+
+    # Load the data from CSV files
+    file1_path = '/home/tomer_local/Rateless-Set-Reconciliation-with-Listing-Guarantees/data/blockchain/node1/node1_txpool_hashes_2.csv'
+    file2_path = '/home/tomer_local/Rateless-Set-Reconciliation-with-Listing-Guarantees/data/blockchain/node2/node2_txpool_hashes_2.csv'
+
+    # Read CSV files assuming they contain hash values in a single column
+    hashes1 = pd.read_csv(file1_path, header=None).squeeze().astype(str)
+    hashes2 = pd.read_csv(file2_path, header=None).squeeze().astype(str)
+
+    # Convert the hash lists to sets for fast symmetric difference computation
+    set1 = set(hashes1)
+    set2 = set(hashes2)
+
+    # Compute symmetric difference
+    symmetric_difference = set1.symmetric_difference(set2)
+
+    # Output the size of the symmetric difference
+    print("Symmetric Difference Size: ", len(symmetric_difference))
+
 if __name__ == "__main__":
 
     # testing()
 
-    integration_test()
+    # integration_test()
+
+    files_testing()
 
 
     
