@@ -3,14 +3,17 @@ package certainsync_test
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
@@ -20,12 +23,12 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSizes []int,
 	mappingType MappingType,
-	rng *rand.Rand) []int {
+	rng *rand.Rand) []uint64 {
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
-	bob := make([]Symbol, 0, universeSize)
+	bob := make([]*uint256.Int, 0, universeSize)
 	for i := 1; i <= universeSize; i++ {
-		bob = append(bob, Uint64Symbol(i))
+		bob = append(bob, uint256.NewInt(uint64((i))))
 	}
 
 	// Sort the symmetric difference sizes
@@ -34,7 +37,7 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 	maxSymmetricDiffSize := symmetricDiffSizes[len(symmetricDiffSizes)-1]
 
 	// Alice's set will include universeSize - symmetricDiffSize elements.
-	alice := make([]Symbol, 0, universeSize-maxSymmetricDiffSize)
+	alice := make([]*uint256.Int, 0, universeSize-maxSymmetricDiffSize)
 
 	// Randomly choose indices from Bob's set to include in Alice's set.
 	chosenIndices := rng.Perm(universeSize)[:universeSize-maxSymmetricDiffSize] // Random permutation.
@@ -48,45 +51,61 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 
 	// Sort Alice's set.
 	sort.Slice(alice, func(i, j int) bool {
-		return uint64(alice[i].(Uint64Symbol)) < uint64(alice[j].(Uint64Symbol))
+		return alice[i].Cmp(alice[j]) == -1
 	})
 
-	initialCells := uint64(1000)
-	var ibfAlice, ibfBob *InvertibleBloomFilter
+	var ibfAlice, ibfBob, receivedCells *InvertibleBloomFilter
 
 	switch mappingType {
 	case EGH:
-		ibfAlice = NewIBF(initialCells, "uint64", &EGHMapping{})
-		ibfBob = NewIBF(initialCells, "uint64", &EGHMapping{})
+		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
+		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
+		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 	case OLS:
 		olsMapping := OLSMapping{
-			Order: uint64(math.Sqrt(float64(universeSize))),
+			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize)))),
 		}
-		ibfAlice = NewIBF(initialCells, "uint64", &olsMapping)
-		ibfBob = NewIBF(initialCells, "uint64", &olsMapping)
+		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
+		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
+		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 	}
 
 	// Prepare a results list for storing the number of cells for each symmetric difference size
-	results := make([]int, len(symmetricDiffSizes))
+	results := make([]uint64, len(symmetricDiffSizes))
 	idx := 0
 	curSymmetricDiffSize := 0
-	prevCellsSize := 0
+	transmittedBits := uint64(0)
+	prevTransmittedBits := uint64(0)
 
 	for {
 		ibfAlice.AddSymbols(alice)
 		ibfBob.AddSymbols(bob)
 
+		// Start - Simulation of communication //////////////////////////////
+
+		ibfAliceBytes, err := ibfAlice.Serialize()
+
+		transmittedBits += uint64(len(ibfAliceBytes)) * 8
+
+		if err != nil {
+			panic(err)
+		}
+
+		receivedCells.Deserialize(ibfAliceBytes)
+
+		// End - Simulation of communication ////////////////////////////////
+
 		// Subtract the two IBFs and Decode the result to find the differences
-		ibfDiff := ibfBob.Subtract(ibfAlice)
-		bobWithoutAlice, _ := ibfDiff.Decode()
+		ibfDiff := ibfBob.Subtract(receivedCells)
+		bobWithoutAlice, _, _ := ibfDiff.Decode()
 
 		if len(bobWithoutAlice) > 0 {
 			curSymmetricDiffSize = len(bobWithoutAlice)
 
 			for (idx < len(symmetricDiffSizes)) &&
 				(curSymmetricDiffSize >= symmetricDiffSizes[idx]) {
-				results[idx] = int(ibfDiff.GetTransmittedBitsSize()) - prevCellsSize
-				prevCellsSize = int(ibfDiff.GetTransmittedBitsSize())
+				results[idx] = transmittedBits - prevTransmittedBits
+				prevTransmittedBits = transmittedBits
 
 				idx++
 			}
@@ -109,6 +128,11 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 	maxSymmetricDiffSize := 10000
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+
 	mappingTypes := []MappingType{EGH, OLS}
 
 	var symmetricDiffSizes []int
@@ -117,7 +141,15 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 	}
 
 	for _, mappingType := range mappingTypes {
-		file, err := os.Create(fmt.Sprintf("%s_additional_bits_vs_diff_size_set_inside_set.csv", string(mappingType)))
+		filename := fmt.Sprintf("%s_additional_bits_vs_diff_size_set_inside_set.csv", string(mappingType))
+
+		filePath := filepath.Join(cwd, "results", filename)
+
+		file, err := os.Create(filePath)
+		if err != nil {
+			b.Fatalf("Error creating file for %s: %v", mappingType, err)
+		}
+
 		if err != nil {
 			b.Fatalf("Error creating file: %v", err)
 		}
@@ -135,7 +167,7 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		globalSeed := time.Now().UnixNano()
 
 		b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
-			results := make(chan []int, numTrials)
+			results := make(chan []uint64, numTrials)
 
 			var wg sync.WaitGroup
 			wg.Add(numTrials)

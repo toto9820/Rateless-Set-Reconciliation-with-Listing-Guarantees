@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 	"github.com/spaolacci/murmur3"
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
@@ -38,66 +39,125 @@ func loadConfig(filePath string) (*Config, error) {
 	return &config, nil
 }
 
-// compareIBFs generates IBFs for two sets of
+// certainSync generates IBFs for two sets of
 // transaction hashes, compares them, and finds the
 // symmetric difference.
-func compareIBFs(hashes1, hashes2 []Symbol, initialCells uint64) (int, uint64) {
-	var ibfNode1, ibfNode2 *InvertibleBloomFilter
+func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (int, uint64) {
+	var ibfNode1, ibfNode2, receivedCells *InvertibleBloomFilter
 
-	ibfNode1 = NewIBF(initialCells, "hash", &EGHMapping{})
-	ibfNode2 = NewIBF(initialCells, "hash", &EGHMapping{})
+	ibfNode1 = NewIBF(universeSize, &EGHMapping{})
+	ibfNode2 = NewIBF(universeSize, &EGHMapping{})
+	receivedCells = NewIBF(universeSize, &EGHMapping{})
+
+	transmittedBits := uint64(0)
 
 	for {
 		ibfNode1.AddSymbols(hashes1)
+
+		// Start - Simulation of communication //////////////////////////////
+
+		ibfNode1Bytes, err := ibfNode1.Serialize()
+
+		transmittedBits += uint64(len(ibfNode1Bytes)) * 8
+
+		if err != nil {
+			panic(err)
+		}
+
+		receivedCells.Deserialize(ibfNode1Bytes)
+
+		// End - Simulation of communication ////////////////////////////////
+
 		ibfNode2.AddSymbols(hashes2)
 
 		// Subtract the two IBFs
-		ibfDiff := ibfNode1.Subtract(ibfNode2)
-		symmetricDiff, ok := ibfDiff.Decode()
+		ibfDiff := ibfNode2.Subtract(receivedCells)
+		// symmetricDiff, ok := ibfDiff.Decode()
+		hashes2Not1, hashes1Not2, ok := ibfDiff.Decode()
 
 		if ok {
-			return len(symmetricDiff), ibfDiff.Size
+			return len(hashes2Not1) + len(hashes1Not2), transmittedBits
 		}
 	}
 }
 
-// compareIBFsExtended generates IBFs for two sets of
-// transaction hashes, compares them, and finds the
-// symmetric difference. Returns symmetric difference size,
-// IBF size, and decoded elements in both directions (A\B and B\A)
-func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells uint64, universeSize uint64) (int, uint64) {
+// UniverseReduceSync compares two sets of transaction hashes using Invertible Bloom Filters
+// and finds their symmetric difference. It supports different mapping methods (EGH or OLS).
+// Returns the size of the symmetric difference and the total number of transmitted bits.
+func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta float64, mappingType MappingType) (int, uint64) {
 	// Create working copies of the input slices
-	remainingHashes1 := make([]Symbol, len(originalHashes1))
-	remainingHashes2 := make([]Symbol, len(originalHashes2))
-	copy(remainingHashes1, originalHashes1)
-	copy(remainingHashes2, originalHashes2)
+	totalHashes1 := make([]*uint256.Int, len(originalHashes1))
+	totalHashes2 := make([]*uint256.Int, len(originalHashes2))
 
-	var allHashes1Not2, allHashes2Not1 []Symbol
-	var totalCells uint64 = 0
+	copy(totalHashes1, originalHashes1)
+	copy(totalHashes2, originalHashes2)
+
+	var allHashes1Not2, allHashes2Not1 []*uint256.Int
+	var totalSymmetricDiff []*uint256.Int
+	var roundNumber uint64 = 1
+	transmittedBits := uint64(0)
 
 	for {
-		hashSeed := GenerateRandomSeed()
-		olsMapping := OLSMapping{Order: uint64(math.Sqrt(float64(universeSize)))}
-		var symmetricDiff []Symbol
+		var sizeS1, sizeS2 uint64
+		var convertedHashes2Not1, convertedHashes1Not2 []*uint256.Int
 		var ok bool
+		var roundSymmetricDiffSize int
 		var ibfDiff *InvertibleBloomFilter
+		// var receivedCells, ibfDiff *InvertibleBloomFilter
 
-		// Hash each symbol to uint32 using murmur3 and remove
-		// duplicates for the next iteration
-		// Maps to convert uint32 hash back to original 256-bit hash
-		convertedHashes1, hashMap1 := uniqueHashedSymbolsWithMapping(remainingHashes1, hashSeed)
-		convertedHashes2, hashMap2 := uniqueHashedSymbolsWithMapping(remainingHashes2, hashSeed)
+		sizeS1 = uint64(len(totalHashes1))
+		sizeS2 = uint64(len(totalHashes2))
+		univerSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
+		universeSize := uint256.NewInt(univerSizeUint64)
 
-		ibfNode1 := NewIBF(initialCells, Uint32SymbolType, &olsMapping)
-		ibfNode2 := NewIBF(initialCells, Uint32SymbolType, &olsMapping)
+		var mapping MappingMethod
+		switch mappingType {
+		case EGH:
+			mapping = &EGHMapping{}
+		case OLS:
+			mapping = &OLSMapping{
+				Order: uint64(math.Ceil(math.Sqrt(float64(univerSizeUint64)))),
+			}
+		default:
+			panic("unsupported mapping type")
+		}
+
+		// Convert each symbol to a reduced symbol
+		// Maps to convert reduced symbol back to original symbol
+		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, universeSize)
+		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, universeSize)
+
+		ibfNode1 := NewIBF(universeSize, mapping)
+		ibfNode2 := NewIBF(universeSize, mapping)
+
+		// receivedCells = NewIBF(universeSize, mapping)
 
 		for {
 			ibfNode1.AddSymbols(convertedHashes1)
+
+			// // Start - Simulation of communication //////////////////////////////
+
+			// ibfNode1Bytes, err := ibfNode1.Serialize()
+
+			// transmittedBits += uint64(len(ibfNode1Bytes)) * 8
+
+			// if err != nil {
+			// 	panic(err)
+			// }
+
+			// receivedCells.Deserialize(ibfNode1Bytes)
+
+			// // End - Simulation of communication ////////////////////////////////
+
 			ibfNode2.AddSymbols(convertedHashes2)
 
 			// Subtract the two IBFs
-			ibfDiff = ibfNode1.Subtract(ibfNode2)
-			symmetricDiff, ok = ibfDiff.Decode()
+			// ibfDiff = ibfNode2.Subtract(receivedCells)
+			ibfDiff = ibfNode2.Subtract(ibfNode1)
+			// symmetricDiff, ok = ibfDiff.Decode()
+			convertedHashes2Not1, convertedHashes1Not2, ok = ibfDiff.Decode()
+
+			roundSymmetricDiffSize = len(convertedHashes2Not1) + len(convertedHashes1Not2)
 
 			// Checking if IBLT of symmmetric difference is empty
 			if ok {
@@ -106,92 +166,178 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []Symbol, initialCells
 		}
 
 		// Split the symmetric difference into 1\2 and 2\1
-		var hashes1Not2, hashes2Not1 []Symbol
+		var hashes1Not2, hashes2Not1 []*uint256.Int
 
-		// For each element in symmetric difference, check
-		// which set it belongs to
-		for _, hash := range symmetricDiff {
-			found := false
-			for _, h1 := range convertedHashes1 {
-				if hash == h1 {
-					hashes1Not2 = append(hashes1Not2, hashMap1[hash.(Uint32Symbol)])
-					found = true
-					break
-				}
-			}
-			if !found {
-				hashes2Not1 = append(hashes2Not1, hashMap2[hash.(Uint32Symbol)])
-			}
+		for _, hash := range convertedHashes1Not2 {
+			hashes1Not2 = append(hashes1Not2, hashMap1[hash.String()]...)
+		}
+
+		for _, hash := range convertedHashes2Not1 {
+			hashes2Not1 = append(hashes2Not1, hashMap2[hash.String()]...)
 		}
 
 		// Accumulate found differences
 		allHashes1Not2 = append(allHashes1Not2, hashes1Not2...)
 		allHashes2Not1 = append(allHashes2Not1, hashes2Not1...)
 
+		totalSymmetricDiff = append(totalSymmetricDiff, hashes1Not2...)
+		totalSymmetricDiff = append(totalSymmetricDiff, hashes2Not1...)
+
 		// Remove found elements from remaining hashes
-		remainingHashes1 = removeSymbols(remainingHashes1, hashes1Not2)
-		remainingHashes2 = removeSymbols(remainingHashes2, hashes2Not1)
+		//remainingHashes1 = removeSymbols(remainingHashes1, hashes1Not2)
+		//remainingHashes2 = removeSymbols(remainingHashes2, hashes2Not1)
 
-		totalCells += ibfDiff.Size
+		totalHashes1 = addSymbols(totalHashes1, hashes2Not1)
+		totalHashes2 = addSymbols(totalHashes2, hashes1Not2)
 
-		calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
-		calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
+		// calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
+		// calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
 
-		if calculatedHashes1Size == len(originalHashes1) {
+		// if calculatedHashes1Size == len(originalHashes1) {
+		if roundSymmetricDiffSize == 0 {
 			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
-			return totalDiffSize, totalCells
+			return totalDiffSize, transmittedBits
 		}
+
+		roundNumber++
 
 	}
 }
 
-// uniqueHashedSymbolsWithMapping hashes each Symbol to a Uint32Symbol with the given seed,
-// removes duplicates, and returns the hashed symbols along with a map to convert back to the original hashes.
-func uniqueHashedSymbolsWithMapping(symbols []Symbol, seed uint32) ([]Symbol, map[Symbol]Symbol) {
-	uniqueSymbols := make([]Symbol, 0)
-	symbolMap := make(map[Symbol]Symbol)
-	seen := make(map[Uint32Symbol]bool)
+// Function to calculate the probability of a collision
+func collisionProbability(nr uint64, m uint64) float64 {
+	// Calculate the product n_r * (n_r - 1) * ... * (n_r - m + 1)
+	// Using log to avoid overflow in large numbers
+	logNoCollisionProb := float64(0)
 
-	for _, sym := range symbols {
-		// Convert each Symbol to its byte representation for hashing
-		symBytes := sym.ToBytes()
-
-		// Hash with murmur3 to get a uint32 representation
-		hashedValue := murmur3.Sum32WithSeed(symBytes, seed)
-		// Extract the lower 16 bits
-		hashedValue16 := uint16(hashedValue & 0xFFFF)
-		// hashedSymbol := Uint32Symbol(hashedValue)
-		hashedSymbol := Uint32Symbol(hashedValue16)
-
-		// Check if this hashed symbol is already added
-		if !seen[hashedSymbol] && hashedSymbol != 0 {
-			uniqueSymbols = append(uniqueSymbols, hashedSymbol)
-			// Store the original HashSymbol
-			symbolMap[hashedSymbol] = sym.(HashSymbol)
-			seen[hashedSymbol] = true
-		}
+	// Compute the log of the product term by term
+	for i := uint64(0); i < m; i++ {
+		logNoCollisionProb += math.Log(float64(nr-i)) - math.Log(float64(nr))
 	}
 
-	return uniqueSymbols, symbolMap
+	// The probability is 1 - exp(logProb)
+	collisionProb := float64(1) - math.Exp(logNoCollisionProb)
+	return collisionProb
+}
+
+// Function to calculate the expected number of collisions
+func expectedCollisions(nr uint64, m uint64) float64 {
+	// Expected number of collisions - m * (m - 1) / 2 * n
+	expectedCollisions := float64(m*(m-1)) / (2 * float64(nr))
+
+	return expectedCollisions
+}
+
+// Function to implement the UniverseSizeReduction algorithm
+func universeSizeReduction(sizeS1 uint64, sizeS2 uint64, delta float64) uint64 {
+	i := uint64(0)
+	m := sizeS1 + sizeS2
+
+	for {
+		// Calculate n_r = 2^ceil(log2(m) + i)
+		nr := uint64(math.Pow(2, math.Ceil(math.Log2(float64(m))+float64(i))))
+
+		// Calculate the collision probability
+		// probability := collisionProbability(nr, m)
+
+		// Calculate the expected number of collisions
+		expectedCollisions := expectedCollisions(nr, m)
+
+		// If the collision probability is below the threshold, break the loop
+		// if probability < delta {
+		// 	return nr
+		// }
+
+		// delta is collisions threshold
+		if expectedCollisions < delta {
+			return nr
+		}
+
+		// Increment i to increase n_r in the next iteration
+		i++
+	}
+
+}
+
+// certainMapping hashes each Symbol to a symbol in a reduced universe
+// size with the use of generated hash salt based on the round number, and
+// returns the hashed symbols along with a map to convert back to the
+// original hashes.
+func certainMapping(symbols []*uint256.Int, roundNumber uint64, universeSize *uint256.Int) ([]*uint256.Int, map[string][]*uint256.Int) {
+	convertedSymbols := make([]*uint256.Int, 0)
+	symbolMap := make(map[string][]*uint256.Int)
+	seen := make(map[string]bool)
+
+	hashSalt := GenerateRandomSalt(roundNumber)
+
+	for _, symbol := range symbols {
+		convertedSymbolUint64 := murmur3.Sum64WithSeed(symbol.Bytes(), hashSalt)
+		convertedSymbol := uint256.NewInt(convertedSymbolUint64)
+		convertedSymbol = convertedSymbol.Mod(convertedSymbol, universeSize)
+		// Converted symbols are positive
+		convertedSymbol = convertedSymbol.AddUint64(convertedSymbol, 1)
+
+		convertedSymbolStr := convertedSymbol.String()
+
+		// If this is the first time seeing this converted symbol, add it
+		// to uniqueSymbols
+		if !seen[convertedSymbolStr] {
+			convertedSymbols = append(convertedSymbols, convertedSymbol)
+			seen[convertedSymbolStr] = true
+			// Initialize the slice for this converted symbol
+			symbolMap[convertedSymbolStr] = make([]*uint256.Int, 0)
+		}
+
+		symbolMap[convertedSymbolStr] = append(symbolMap[convertedSymbolStr], symbol)
+	}
+
+	return convertedSymbols, symbolMap
 }
 
 // removeSymbols removes the specified symbols from the source slice
-func removeSymbols(source []Symbol, toRemove []Symbol) []Symbol {
+func removeSymbols(source []*uint256.Int, toRemove []*uint256.Int) []*uint256.Int {
 	if len(toRemove) == 0 {
 		return source
 	}
 
 	// Create a map for quick lookup of symbols to remove
-	removeMap := make(map[Symbol]bool)
+	removeMap := make(map[string]bool)
 	for _, sym := range toRemove {
-		removeMap[sym] = true
+		removeMap[sym.String()] = true
 	}
 
 	// Create new slice with non-removed elements
-	result := make([]Symbol, 0, len(source))
+	result := make([]*uint256.Int, 0, len(source))
 	for _, sym := range source {
-		if !removeMap[sym] {
+		if !removeMap[sym.String()] {
 			result = append(result, sym)
+		}
+	}
+
+	return result
+}
+
+func addSymbols(source []*uint256.Int, toAdd []*uint256.Int) []*uint256.Int {
+	if len(toAdd) == 0 {
+		return source
+	}
+
+	// Create a map to track existing symbols for efficient deduplication
+	existingSymbols := make(map[string]bool)
+	for _, sym := range source {
+		existingSymbols[sym.String()] = true
+	}
+
+	// Create a new slice with the original source symbols
+	result := make([]*uint256.Int, len(source))
+	copy(result, source)
+
+	// Add new symbols that are not already present
+	for _, sym := range toAdd {
+		symStr := sym.String()
+		if !existingSymbols[symStr] {
+			result = append(result, sym)
+			existingSymbols[symStr] = true
 		}
 	}
 
@@ -324,7 +470,10 @@ func txpool_sync() {
 			log.Printf("Error saving Node 2 stats to CSV: %v", err)
 		}
 
-		symDiffSize, totalCells := compareIBFs(hashes1, hashes2, 1000)
+		// relevant only for egh for now (ols universe reduction)
+		universeSize := uint256.NewInt(0).SetAllOne()
+
+		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize)
 		fmt.Printf("Iteration %d: Symmetric Difference: %d\n", iterationCount, symDiffSize)
 
 		err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
@@ -338,9 +487,11 @@ func txpool_sync() {
 }
 
 func main() {
-	// txpool_sync()
+	// txpool_sync_from_nodes_certain_sync()
 
-	// txpool_sync_from_file_egh()
+	// txpool_sync_from_nodes_universe_reduce_sync()
 
-	txpool_sync_from_file_ols()
+	txpool_sync_from_file_certain_sync()
+
+	txpool_sync_from_file_universe_reduce_sync()
 }

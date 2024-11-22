@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
-	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
+	"github.com/holiman/uint256"
 )
 
 type MappingType string
@@ -43,28 +45,29 @@ func fetchTxPoolContent(client *rpc.Client, ctx context.Context) (TxPoolContent,
 
 // getTransactionHashes extracts transaction hashes
 // from the txpool data.
-func getTransactionsHashes(txpoolData TxPoolContent) []Symbol {
-	var hashes []Symbol
+func getTransactionsHashes(txpoolData TxPoolContent) []*uint256.Int {
+	var hashes []*uint256.Int
 
 	// Collect pending transaction hashes
 	for _, txs := range txpoolData.Pending {
 		for _, tx := range txs {
-			hashes = append(hashes, HashSymbol(tx.Hash))
+			hashes = append(hashes, uint256.NewInt(0).SetBytes(tx.Hash[:]))
 		}
 	}
 
 	// Collect queued transaction hashes
 	for _, txs := range txpoolData.Queued {
 		for _, tx := range txs {
-			hashes = append(hashes, HashSymbol(tx.Hash))
+			hashes = append(hashes, uint256.NewInt(0).SetBytes(tx.Hash[:]))
 		}
 	}
 
 	return hashes
 }
 
-func getTransactionsHashesFromFile(hashesFilePath string) []Symbol {
-	var hashes []Symbol
+func getTransactionsHashesFromFile(hashesFilePath string) []*uint256.Int {
+	// var hashes []Symbol
+	var hashes []*uint256.Int
 
 	// Open the CSV file
 	file, err := os.Open(hashesFilePath)
@@ -88,11 +91,22 @@ func getTransactionsHashesFromFile(hashesFilePath string) []Symbol {
 			// (one hash per line)
 			hashStr := record[0]
 
+			// Remove 0x prefix if present
+			hashStr = strings.TrimPrefix(hashStr, "0x")
+
+			// Decode hex string to bytes
+			hashBytes, err := hex.DecodeString(hashStr)
+
+			if err != nil {
+				panic(err)
+			}
+
 			// Convert to common.Hash
-			hash := common.HexToHash(hashStr)
+			// hash := common.HexToHash(hashStr)
+			hash := uint256.NewInt(0).SetBytes(hashBytes)
 
 			// Append to the slice
-			hashes = append(hashes, HashSymbol(hash))
+			hashes = append(hashes, hash)
 		}
 	}
 
