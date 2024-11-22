@@ -7,11 +7,13 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
 	. "github.com/toto9820/Rateless-Set-Reconciliation-with-Listing-Guarantees/certainsync"
 )
 
@@ -34,13 +36,13 @@ func runTrialTotalBitsVsDiffSize(trialNumber int,
 
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
-	bob := make([]Symbol, 0, universeSize)
+	bob := make([]*uint256.Int, 0, universeSize)
 	for i := 1; i <= universeSize; i++ {
-		bob = append(bob, Uint64Symbol(i))
+		bob = append(bob, uint256.NewInt(uint64((i))))
 	}
 
 	// Alice's set will include universeSize - symmetricDiffSize elements.
-	alice := make([]Symbol, 0, universeSize-symmetricDiffSize)
+	alice := make([]*uint256.Int, 0, universeSize-symmetricDiffSize)
 
 	// Randomly choose indices from Bob's set to include in Alice's set.
 	chosenIndices := rng.Perm(universeSize)[:universeSize-symmetricDiffSize]
@@ -50,49 +52,64 @@ func runTrialTotalBitsVsDiffSize(trialNumber int,
 
 	// Sort Alice's set.
 	sort.Slice(alice, func(i, j int) bool {
-		return uint64(alice[i].(Uint64Symbol)) < uint64(alice[j].(Uint64Symbol))
+		return alice[i].Cmp(alice[j]) == -1
 	})
 
-	initialCells := uint64(1000)
-	var ibfAlice, ibfBob *InvertibleBloomFilter
+	var ibfAlice, ibfBob, receivedCells *InvertibleBloomFilter
 
 	switch mappingType {
 	case EGH:
-		ibfAlice = NewIBF(initialCells, "uint64", &EGHMapping{})
-		ibfBob = NewIBF(initialCells, "uint64", &EGHMapping{})
+		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
+		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
+		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 	case OLS:
 		olsMapping := OLSMapping{
-			Order: uint64(math.Sqrt(float64(universeSize))),
+			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize)))),
 		}
-		ibfAlice = NewIBF(initialCells, "uint64", &olsMapping)
-		ibfBob = NewIBF(initialCells, "uint64", &olsMapping)
+		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
+		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
+		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 	}
 
-	cost := uint64(0)
+	transmittedBits := uint64(0)
 
 	for {
 		ibfAlice.AddSymbols(alice)
+
+		// Start - Simulation of communication //////////////////////////////
+
+		ibfAliceBytes, err := ibfAlice.Serialize()
+
+		transmittedBits += uint64(len(ibfAliceBytes)) * 8
+
+		if err != nil {
+			panic(err)
+		}
+
+		receivedCells.Deserialize(ibfAliceBytes)
+
+		// End - Simulation of communication ////////////////////////////////
+
 		ibfBob.AddSymbols(bob)
 
-		ibfDiff := ibfBob.Subtract(ibfAlice)
-		bobWithoutAlice, ok := ibfDiff.Decode()
+		ibfDiff := ibfBob.Subtract(receivedCells)
+		bobWithoutAlice, _, ok := ibfDiff.Decode()
 
 		if ok == false {
 			continue
 		}
 
 		if len(bobWithoutAlice) == symmetricDiffSize {
-			cost = ibfDiff.GetTransmittedBitsSize()
 			break
 		}
 	}
 
 	fmt.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d bits\n",
-		trialNumber, mappingType, symmetricDiffSize, cost)
+		trialNumber, mappingType, symmetricDiffSize, transmittedBits)
 	log.Printf("Trial %d for %s method, Symmetric Difference len: %d with %d bits\n",
-		trialNumber, mappingType, symmetricDiffSize, cost)
+		trialNumber, mappingType, symmetricDiffSize, transmittedBits)
 
-	return cost
+	return transmittedBits
 }
 
 // BenchmarkReconciliation benchmarks both EGH and OLS methods
@@ -107,6 +124,11 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		{10000},
 	}
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+
 	universeSize := int(math.Pow(10, 6))
 	// For Debugging
 	numTrials := 1
@@ -117,7 +139,10 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		// Create a CSV file for each mapping type
 		filename := fmt.Sprintf("%s_total_bits_vs_diff_size_set_inside_set.csv",
 			string(mappingType))
-		file, err := os.Create(filename)
+
+		filePath := filepath.Join(cwd, "results", filename)
+
+		file, err := os.Create(filePath)
 		if err != nil {
 			b.Fatalf("Error creating file for %s: %v", mappingType, err)
 		}
