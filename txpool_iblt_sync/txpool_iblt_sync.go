@@ -39,10 +39,10 @@ func loadConfig(filePath string) (*Config, error) {
 	return &config, nil
 }
 
-// compareIBFs generates IBFs for two sets of
+// certainSync generates IBFs for two sets of
 // transaction hashes, compares them, and finds the
 // symmetric difference.
-func compareIBFs(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (int, uint64) {
+func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (int, uint64) {
 	var ibfNode1, ibfNode2, receivedCells *InvertibleBloomFilter
 
 	ibfNode1 = NewIBF(universeSize, &EGHMapping{})
@@ -81,17 +81,16 @@ func compareIBFs(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (in
 	}
 }
 
-// compareIBFsExtended generates IBFs for two sets of
-// transaction hashes, compares them, and finds the
-// symmetric difference. Returns symmetric difference size,
-// IBF size, and decoded elements in both directions (A\B and B\A)
-func compareIBFsExtended(originalHashes1, originalHashes2 []*uint256.Int, delta float64) (int, uint64) {
+// UniverseReduceSync compares two sets of transaction hashes using Invertible Bloom Filters
+// and finds their symmetric difference. It supports different mapping methods (EGH or OLS).
+// Returns the size of the symmetric difference and the total number of transmitted bits.
+func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta float64, mappingType MappingType) (int, uint64) {
 	// Create working copies of the input slices
-	remainingHashes1 := make([]*uint256.Int, len(originalHashes1))
-	remainingHashes2 := make([]*uint256.Int, len(originalHashes2))
+	totalHashes1 := make([]*uint256.Int, len(originalHashes1))
+	totalHashes2 := make([]*uint256.Int, len(originalHashes2))
 
-	copy(remainingHashes1, originalHashes1)
-	copy(remainingHashes2, originalHashes2)
+	copy(totalHashes1, originalHashes1)
+	copy(totalHashes2, originalHashes2)
 
 	var allHashes1Not2, allHashes2Not1 []*uint256.Int
 	var totalSymmetricDiff []*uint256.Int
@@ -99,8 +98,6 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []*uint256.Int, delta 
 	transmittedBits := uint64(0)
 
 	for {
-		// olsMapping := OLSMapping{Order: uint64(math.Ceil(math.Sqrt(float64(universeSize.Uint64()))))}
-		// var symmetricDiff []*uint256.Int
 		var sizeS1, sizeS2 uint64
 		var convertedHashes2Not1, convertedHashes1Not2 []*uint256.Int
 		var ok bool
@@ -108,22 +105,32 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []*uint256.Int, delta 
 		var ibfDiff *InvertibleBloomFilter
 		// var receivedCells, ibfDiff *InvertibleBloomFilter
 
-		sizeS1 = uint64(len(remainingHashes1))
-		sizeS2 = uint64(len(remainingHashes2))
+		sizeS1 = uint64(len(totalHashes1))
+		sizeS2 = uint64(len(totalHashes2))
 		univerSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
 		universeSize := uint256.NewInt(univerSizeUint64)
 
+		var mapping MappingMethod
+		switch mappingType {
+		case EGH:
+			mapping = &EGHMapping{}
+		case OLS:
+			mapping = &OLSMapping{
+				Order: uint64(math.Ceil(math.Sqrt(float64(univerSizeUint64)))),
+			}
+		default:
+			panic("unsupported mapping type")
+		}
+
 		// Convert each symbol to a reduced symbol
 		// Maps to convert reduced symbol back to original symbol
-		convertedHashes1, hashMap1 := certainMapping(remainingHashes1, roundNumber, universeSize)
-		convertedHashes2, hashMap2 := certainMapping(remainingHashes2, roundNumber, universeSize)
+		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, universeSize)
+		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, universeSize)
 
-		// ibfNode1 := NewIBF(universeSize, &olsMapping)
-		// ibfNode2 := NewIBF(universeSize, &olsMapping)
+		ibfNode1 := NewIBF(universeSize, mapping)
+		ibfNode2 := NewIBF(universeSize, mapping)
 
-		ibfNode1 := NewIBF(universeSize, &EGHMapping{})
-		ibfNode2 := NewIBF(universeSize, &EGHMapping{})
-		// receivedCells = NewIBF(universeSize, &olsMapping)
+		// receivedCells = NewIBF(universeSize, mapping)
 
 		for {
 			ibfNode1.AddSymbols(convertedHashes1)
@@ -162,16 +169,10 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []*uint256.Int, delta 
 		var hashes1Not2, hashes2Not1 []*uint256.Int
 
 		for _, hash := range convertedHashes1Not2 {
-			if len(hashMap1[hash.String()]) > 1 {
-				fmt.Println("Multiple mapping 1")
-			}
 			hashes1Not2 = append(hashes1Not2, hashMap1[hash.String()]...)
 		}
 
 		for _, hash := range convertedHashes2Not1 {
-			if len(hashMap2[hash.String()]) > 1 {
-				fmt.Println("Multiple mapping 2")
-			}
 			hashes2Not1 = append(hashes2Not1, hashMap2[hash.String()]...)
 		}
 
@@ -186,8 +187,8 @@ func compareIBFsExtended(originalHashes1, originalHashes2 []*uint256.Int, delta 
 		//remainingHashes1 = removeSymbols(remainingHashes1, hashes1Not2)
 		//remainingHashes2 = removeSymbols(remainingHashes2, hashes2Not1)
 
-		remainingHashes1 = addSymbols(remainingHashes1, hashes2Not1)
-		remainingHashes2 = addSymbols(remainingHashes2, hashes1Not2)
+		totalHashes1 = addSymbols(totalHashes1, hashes2Not1)
+		totalHashes2 = addSymbols(totalHashes2, hashes1Not2)
 
 		// calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
 		// calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
@@ -285,15 +286,11 @@ func certainMapping(symbols []*uint256.Int, roundNumber uint64, universeSize *ui
 			seen[convertedSymbolStr] = true
 			// Initialize the slice for this converted symbol
 			symbolMap[convertedSymbolStr] = make([]*uint256.Int, 0)
-			// symbolMap[convertedSymbolStr] = symbol
-		} else {
-			// For Debug
-			fmt.Print(convertedSymbolStr, ", ")
 		}
 
 		symbolMap[convertedSymbolStr] = append(symbolMap[convertedSymbolStr], symbol)
 	}
-	fmt.Println("-------------------------------------")
+
 	return convertedSymbols, symbolMap
 }
 
@@ -476,7 +473,7 @@ func txpool_sync() {
 		// relevant only for egh for now (ols universe reduction)
 		universeSize := uint256.NewInt(0).SetAllOne()
 
-		symDiffSize, totalCells := compareIBFs(hashes1, hashes2, universeSize)
+		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize)
 		fmt.Printf("Iteration %d: Symmetric Difference: %d\n", iterationCount, symDiffSize)
 
 		err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
@@ -490,9 +487,11 @@ func txpool_sync() {
 }
 
 func main() {
-	// txpool_sync()
+	// txpool_sync_from_nodes_certain_sync()
 
-	// txpool_sync_from_file_egh()
+	// txpool_sync_from_nodes_universe_reduce_sync()
 
-	txpool_sync_from_file_ols()
+	txpool_sync_from_file_certain_sync()
+
+	txpool_sync_from_file_universe_reduce_sync()
 }
