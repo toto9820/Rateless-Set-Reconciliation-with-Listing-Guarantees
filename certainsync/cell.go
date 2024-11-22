@@ -26,7 +26,6 @@ func NewIBFCell(universeSize *uint256.Int) IBFCell {
 		HashSum: uint256.NewInt(0),
 	}
 	cell.setHasher(universeSize)
-	// cell.HashSum = cell.Hasher.Hash(nil)
 	return cell
 }
 

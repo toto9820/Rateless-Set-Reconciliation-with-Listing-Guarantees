@@ -131,8 +131,8 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 
 	universeSize := int(math.Pow(10, 6))
 	// For Debugging
-	numTrials := 1
-	// numTrials := 10
+	// numTrials := 1
+	numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
