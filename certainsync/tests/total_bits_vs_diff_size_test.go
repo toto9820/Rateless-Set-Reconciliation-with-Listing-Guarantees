@@ -116,9 +116,11 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 	}
 
 	universeSize := int(math.Pow(10, 6))
+
 	// For Debugging
-	numTrials := 1
-	//numTrials := 10
+	//numTrials := 1
+
+	numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
@@ -140,7 +142,18 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		// Write the header row
 		writer.Write([]string{"Symmetric Diff Size", "Total Bits Transmitted"})
 
+		var maxSymmetricDiffSize int
+		if mappingType == OLS {
+			maxSymmetricDiffSize = int(math.Ceil(math.Sqrt(float64(universeSize))))
+		} else {
+			maxSymmetricDiffSize = benches[len(benches)-1].symmetricDiffSize
+		}
+
 		for _, bench := range benches {
+			if bench.symmetricDiffSize > maxSymmetricDiffSize {
+				continue
+			}
+
 			b.Run(fmt.Sprintf("%s_Universe=%d_Diff=%d",
 				mappingType, universeSize, bench.symmetricDiffSize),
 				func(b *testing.B) {

@@ -119,14 +119,21 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
+	numTrials := 10
+	universeSize := int(math.Pow(10, 6))
+
 	mappingTypes := []MappingType{EGH, OLS}
 
-	var symmetricDiffSizes []int
-	for i := 0; i <= int(math.Log10(float64(maxSymmetricDiffSize))); i++ {
-		symmetricDiffSizes = append(symmetricDiffSizes, int(math.Pow(10, float64(i))))
-	}
-
 	for _, mappingType := range mappingTypes {
+		if mappingType == OLS {
+			maxSymmetricDiffSize = int(math.Ceil(math.Sqrt(float64(universeSize))))
+		}
+
+		var symmetricDiffSizes []int
+		for i := 0; i <= int(math.Log10(float64(maxSymmetricDiffSize))); i++ {
+			symmetricDiffSizes = append(symmetricDiffSizes, int(math.Pow(10, float64(i))))
+		}
+
 		filename := fmt.Sprintf("%s_additional_bits_vs_diff_size_set_inside_set.csv", string(mappingType))
 
 		filePath := filepath.Join(cwd, "results", filename)
@@ -145,9 +152,6 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		defer writer.Flush()
 
 		writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
-
-		numTrials := 10
-		universeSize := int(math.Pow(10, 6))
 
 		aggregatedAdditionalBits := make([]int64, len(symmetricDiffSizes))
 		globalSeed := time.Now().UnixNano()

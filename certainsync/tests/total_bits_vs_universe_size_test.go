@@ -80,10 +80,10 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 		}
 	}
 
-	fmt.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits", trialNumber, symmetricDiffSize, cost)
+	fmt.Printf("Trial %d for %s method for CertainSync IBLT, Symmetric Difference len: %d with %d bits", trialNumber, mappingType, symmetricDiffSize, cost)
 	fmt.Println()
 
-	log.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits\n", trialNumber, symmetricDiffSize, cost)
+	log.Printf("Trial %d for %s method for CertainSync IBLT, Symmetric Difference len: %d with %d bits\n", trialNumber, mappingType, symmetricDiffSize, cost)
 
 	// Return number of bits transmitted
 	return cost
@@ -93,6 +93,7 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 // process with fixed symmetric difference sizes and varying universe sizes.
 func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 	symmetricDiffSizes := []int{1, 3, 30, 90}
+
 	universeSizes := []int{
 		int(math.Pow(10, 3)), // 1,000
 		int(math.Pow(10, 4)), // 10,000
