@@ -51,20 +51,18 @@ func runTrialSuccessRateVsTotalBits(trialNumber int,
 		return alice[i].Cmp(alice[j]) == -1
 	})
 
-	var ibfAlice, ibfBob, receivedCells *InvertibleBloomFilter
+	var ibfAlice, ibfBob *InvertibleBloomFilter
 
 	switch mappingType {
 	case EGH:
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 	case OLS:
 		olsMapping := OLSMapping{
 			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize)))),
 		}
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 	}
 
 	// Initialize the results to store success rate vs. total bits
@@ -76,24 +74,12 @@ func runTrialSuccessRateVsTotalBits(trialNumber int,
 	for curSymmetricDiffSize < symmetricDiffSize {
 		ibfAlice.AddSymbols(alice)
 
-		// Start - Simulation of communication //////////////////////////////
-
-		ibfAliceBytes, err := ibfAlice.Serialize()
-
-		transmittedBits += uint64(len(ibfAliceBytes)) * 8
-
-		if err != nil {
-			panic(err)
-		}
-
-		receivedCells.Deserialize(ibfAliceBytes)
-
-		// End - Simulation of communication ////////////////////////////////
+		transmittedBits = ibfAlice.GetTransmittedBitsSize()
 
 		ibfBob.AddSymbols(bob)
 
 		// Subtract the two IBFs and Decode the result to find the differences
-		ibfDiff := ibfBob.Subtract(receivedCells)
+		ibfDiff := ibfBob.Subtract(ibfAlice)
 		bobWithoutAlice, _, _ := ibfDiff.Decode()
 
 		if len(bobWithoutAlice) > 0 {

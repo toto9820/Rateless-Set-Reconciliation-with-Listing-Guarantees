@@ -27,7 +27,7 @@ func txpool_sync_from_file_certain_sync() {
 	maxIterations := 15
 	universeSize := uint256.NewInt(0).SetAllOne()
 
-	mappingTypes := []MappingType{EGH, OLS}
+	mappingTypes := []MappingType{EGH}
 
 	for _, mappingType := range mappingTypes {
 		symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_certain_sync_file_symmetric_diff_stats.csv", mappingType))
@@ -88,9 +88,9 @@ func txpool_sync_from_file_universe_reduce_sync() {
 		hashes2 := getTransactionsHashesFromFile(node2HashesFilePath)
 
 		for _, mappingType := range mappingTypes {
-			symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_universe_reduce_sync_file_symmetric_diff_stats.csv", mappingType))
-
 			for _, deltaSize := range deltaSizes {
+				symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_universe_reduce_sync_file_symmetric_diff_stats_delta_%d.csv", mappingType, uint64(deltaSize)))
+
 				symDiffSize, totalCells := universeReduceSync(hashes1, hashes2, deltaSize, mappingType)
 				fmt.Printf("MappingType %s, Iteration %d, Delta Size %f: Symmetric Difference: %d, Total Cells: %d\n", mappingType, iterationCount, deltaSize, symDiffSize, totalCells)
 

@@ -43,7 +43,7 @@ func loadConfig(filePath string) (*Config, error) {
 // transaction hashes, compares them, and finds the
 // symmetric difference.
 func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int, mappingType MappingType) (int, uint64) {
-	var ibfNode1, ibfNode2, receivedCells *InvertibleBloomFilter
+	var ibfNode1, ibfNode2 *InvertibleBloomFilter
 
 	var mapping MappingMethod
 	switch mappingType {
@@ -59,32 +59,18 @@ func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int, map
 
 	ibfNode1 = NewIBF(universeSize, mapping)
 	ibfNode2 = NewIBF(universeSize, mapping)
-	receivedCells = NewIBF(universeSize, mapping)
 
 	transmittedBits := uint64(0)
 
 	for {
 		ibfNode1.AddSymbols(hashes1)
 
-		// Start - Simulation of communication //////////////////////////////
-
-		ibfNode1Bytes, err := ibfNode1.Serialize()
-
-		transmittedBits += uint64(len(ibfNode1Bytes)) * 8
-
-		if err != nil {
-			panic(err)
-		}
-
-		receivedCells.Deserialize(ibfNode1Bytes)
-
-		// End - Simulation of communication ////////////////////////////////
+		transmittedBits += ibfNode1.GetTransmittedBitsSize()
 
 		ibfNode2.AddSymbols(hashes2)
 
 		// Subtract the two IBFs
-		ibfDiff := ibfNode2.Subtract(receivedCells)
-		// symmetricDiff, ok := ibfDiff.Decode()
+		ibfDiff := ibfNode2.Subtract(ibfNode1)
 		hashes2Not1, hashes1Not2, ok := ibfDiff.Decode()
 
 		if ok {
@@ -115,7 +101,6 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		var ok bool
 		var roundSymmetricDiffSize int
 		var ibfDiff *InvertibleBloomFilter
-		// var receivedCells, ibfDiff *InvertibleBloomFilter
 
 		sizeS1 = uint64(len(totalHashes1))
 		sizeS2 = uint64(len(totalHashes2))
@@ -142,31 +127,15 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		ibfNode1 := NewIBF(universeSize, mapping)
 		ibfNode2 := NewIBF(universeSize, mapping)
 
-		// receivedCells = NewIBF(universeSize, mapping)
-
 		for {
 			ibfNode1.AddSymbols(convertedHashes1)
 
-			// // Start - Simulation of communication //////////////////////////////
-
-			// ibfNode1Bytes, err := ibfNode1.Serialize()
-
-			// transmittedBits += uint64(len(ibfNode1Bytes)) * 8
-
-			// if err != nil {
-			// 	panic(err)
-			// }
-
-			// receivedCells.Deserialize(ibfNode1Bytes)
-
-			// // End - Simulation of communication ////////////////////////////////
+			transmittedBits = ibfNode1.GetTransmittedBitsSize()
 
 			ibfNode2.AddSymbols(convertedHashes2)
 
 			// Subtract the two IBFs
-			// ibfDiff = ibfNode2.Subtract(receivedCells)
 			ibfDiff = ibfNode2.Subtract(ibfNode1)
-			// symmetricDiff, ok = ibfDiff.Decode()
 			convertedHashes2Not1, convertedHashes1Not2, ok = ibfDiff.Decode()
 
 			roundSymmetricDiffSize = len(convertedHashes2Not1) + len(convertedHashes1Not2)
@@ -202,10 +171,6 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		totalHashes1 = addSymbols(totalHashes1, hashes2Not1)
 		totalHashes2 = addSymbols(totalHashes2, hashes1Not2)
 
-		// calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
-		// calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
-
-		// if calculatedHashes1Size == len(originalHashes1) {
 		if roundSymmetricDiffSize == 0 {
 			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
 			return totalDiffSize, transmittedBits
@@ -506,7 +471,7 @@ func main() {
 
 	// txpool_sync_from_nodes_universe_reduce_sync()
 
-	txpool_sync_from_file_certain_sync()
+	// txpool_sync_from_file_certain_sync()
 
 	txpool_sync_from_file_universe_reduce_sync()
 }
