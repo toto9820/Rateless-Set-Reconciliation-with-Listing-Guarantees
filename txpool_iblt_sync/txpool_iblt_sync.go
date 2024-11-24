@@ -74,6 +74,10 @@ func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int, map
 		hashes2Not1, hashes1Not2, ok := ibfDiff.Decode()
 
 		if ok {
+			// Sending back to node1 transactions of 2/1 where each
+			// transaction is 256 bit.
+			transmittedBits += uint64(len(hashes2Not1)) * 256
+
 			return len(hashes2Not1) + len(hashes1Not2), transmittedBits
 		}
 	}
@@ -100,12 +104,13 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		var convertedHashes2Not1, convertedHashes1Not2 []*uint256.Int
 		var ok bool
 		var roundSymmetricDiffSize int
+		var roundTransmittedBits uint64 = 0
 		var ibfDiff *InvertibleBloomFilter
 
 		sizeS1 = uint64(len(totalHashes1))
 		sizeS2 = uint64(len(totalHashes2))
-		univerSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
-		universeSize := uint256.NewInt(univerSizeUint64)
+		reducedUniverSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
+		reducedUniverseSize := uint256.NewInt(reducedUniverSizeUint64)
 
 		var mapping MappingMethod
 		switch mappingType {
@@ -113,7 +118,7 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 			mapping = &EGHMapping{}
 		case OLS:
 			mapping = &OLSMapping{
-				Order: uint64(math.Ceil(math.Sqrt(float64(univerSizeUint64)))),
+				Order: uint64(math.Ceil(math.Sqrt(float64(reducedUniverSizeUint64)))),
 			}
 		default:
 			panic("unsupported mapping type")
@@ -121,16 +126,16 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 
 		// Convert each symbol to a reduced symbol
 		// Maps to convert reduced symbol back to original symbol
-		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, universeSize)
-		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, universeSize)
+		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, reducedUniverseSize)
+		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, reducedUniverseSize)
 
-		ibfNode1 := NewIBF(universeSize, mapping)
-		ibfNode2 := NewIBF(universeSize, mapping)
+		ibfNode1 := NewIBF(reducedUniverseSize, mapping)
+		ibfNode2 := NewIBF(reducedUniverseSize, mapping)
 
 		for {
 			ibfNode1.AddSymbols(convertedHashes1)
 
-			transmittedBits = ibfNode1.GetTransmittedBitsSize()
+			roundTransmittedBits = ibfNode1.GetTransmittedBitsSize()
 
 			ibfNode2.AddSymbols(convertedHashes2)
 
@@ -146,6 +151,8 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 			}
 		}
 
+		transmittedBits += roundTransmittedBits
+
 		// Split the symmetric difference into 1\2 and 2\1
 		var hashes1Not2, hashes2Not1 []*uint256.Int
 
@@ -156,6 +163,15 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		for _, hash := range convertedHashes2Not1 {
 			hashes2Not1 = append(hashes2Not1, hashMap2[hash.String()]...)
 		}
+
+		// Sending to node1 transactions of 2/1 where each
+		// transaction is 256 bit, and 1/2 of converted transactions.
+		transmittedBits += uint64(len(convertedHashes1Not2)*reducedUniverseSize.ByteLen()) * 8
+		transmittedBits += uint64(len(hashes2Not1)) * 256
+
+		// Sending to node2 transactions of 1/2 where each
+		// transaction is 256 bit.
+		transmittedBits += uint64(len(hashes1Not2)) * 256
 
 		// Accumulate found differences
 		allHashes1Not2 = append(allHashes1Not2, hashes1Not2...)
@@ -226,7 +242,7 @@ func universeSizeReduction(sizeS1 uint64, sizeS2 uint64, delta float64) uint64 {
 		// }
 
 		// delta is collisions threshold
-		if expectedCollisions < delta {
+		if expectedCollisions <= delta {
 			return nr
 		}
 

@@ -91,10 +91,10 @@ func txpool_sync_from_file_universe_reduce_sync() {
 			for _, deltaSize := range deltaSizes {
 				symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_universe_reduce_sync_file_symmetric_diff_stats_delta_%d.csv", mappingType, uint64(deltaSize)))
 
-				symDiffSize, totalCells := universeReduceSync(hashes1, hashes2, deltaSize, mappingType)
-				fmt.Printf("MappingType %s, Iteration %d, Delta Size %f: Symmetric Difference: %d, Total Cells: %d\n", mappingType, iterationCount, deltaSize, symDiffSize, totalCells)
+				symDiffSize, totalTransmittedBits := universeReduceSync(hashes1, hashes2, deltaSize, mappingType)
+				fmt.Printf("MappingType %s, Iteration %d, Delta Size %d: Symmetric Difference: %d, Total Transmitted Bits: %d\n", mappingType, iterationCount, uint64(deltaSize), symDiffSize, totalTransmittedBits)
 
-				err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
+				err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalTransmittedBits)
 				if err != nil {
 					log.Printf("Error saving symmetric difference stats to CSV: %v", err)
 				}
