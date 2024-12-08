@@ -310,6 +310,7 @@ func removeSymbols(source []*uint256.Int, toRemove []*uint256.Int) []*uint256.In
 	return result
 }
 
+// addSymbols adds the specified symbols to the source slice
 func addSymbols(source []*uint256.Int, toAdd []*uint256.Int) []*uint256.Int {
 	if len(toAdd) == 0 {
 		return source
@@ -380,6 +381,8 @@ func saveSymmetricDiffStatsToCSV(filePath string, iterationCount int, symDiffSiz
 	return nil
 }
 
+// txpool_sync performs TxPool synchronization between
+// two blockchain nodes in real time.
 func txpool_sync() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -483,6 +486,8 @@ func txpool_sync() {
 }
 
 func main() {
+	// txpool_sync()
+
 	// txpool_sync_from_nodes_certain_sync()
 
 	// txpool_sync_from_nodes_universe_reduce_sync()

@@ -2,9 +2,14 @@ package certainsync
 
 import "github.com/holiman/uint256"
 
-// MappingMethod is an interface for mapping methods.
+// MappingMethod is an interface for defining symbol-to-cell mapping methods.
+// It provides methods for determining the target cell for a given symbol
+// and calculating the number of additional cells required for each iteration.
 type MappingMethod interface {
+	// MapSymbol maps a symbol to a specific cell for the given iteration.
 	MapSymbol(s *uint256.Int, iteration uint64) uint64
+	// GetAdditionalCellsCount returns the number of additional cells required
+	// for the given iteration.
 	GetAdditionalCellsCount(iteration uint64) uint64
 }
 
