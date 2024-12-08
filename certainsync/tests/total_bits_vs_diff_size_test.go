@@ -55,20 +55,18 @@ func runTrialTotalBitsVsDiffSize(trialNumber int,
 		return alice[i].Cmp(alice[j]) == -1
 	})
 
-	var ibfAlice, ibfBob, receivedCells *InvertibleBloomFilter
+	var ibfAlice, ibfBob *InvertibleBloomFilter
 
 	switch mappingType {
 	case EGH:
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 	case OLS:
 		olsMapping := OLSMapping{
 			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize)))),
 		}
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 	}
 
 	transmittedBits := uint64(0)
@@ -76,23 +74,11 @@ func runTrialTotalBitsVsDiffSize(trialNumber int,
 	for {
 		ibfAlice.AddSymbols(alice)
 
-		// Start - Simulation of communication //////////////////////////////
-
-		ibfAliceBytes, err := ibfAlice.Serialize()
-
-		transmittedBits += uint64(len(ibfAliceBytes)) * 8
-
-		if err != nil {
-			panic(err)
-		}
-
-		receivedCells.Deserialize(ibfAliceBytes)
-
-		// End - Simulation of communication ////////////////////////////////
+		transmittedBits = ibfAlice.GetTransmittedBitsSize()
 
 		ibfBob.AddSymbols(bob)
 
-		ibfDiff := ibfBob.Subtract(receivedCells)
+		ibfDiff := ibfBob.Subtract(ibfAlice)
 		bobWithoutAlice, _, ok := ibfDiff.Decode()
 
 		if ok == false {
@@ -130,9 +116,11 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 	}
 
 	universeSize := int(math.Pow(10, 6))
+
 	// For Debugging
-	numTrials := 1
-	//numTrials := 10
+	//numTrials := 1
+
+	numTrials := 10
 	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
@@ -154,7 +142,18 @@ func BenchmarkTotalBitsVsDiffSize(b *testing.B) {
 		// Write the header row
 		writer.Write([]string{"Symmetric Diff Size", "Total Bits Transmitted"})
 
+		var maxSymmetricDiffSize int
+		if mappingType == OLS {
+			maxSymmetricDiffSize = int(math.Ceil(math.Sqrt(float64(universeSize))))
+		} else {
+			maxSymmetricDiffSize = benches[len(benches)-1].symmetricDiffSize
+		}
+
 		for _, bench := range benches {
+			if bench.symmetricDiffSize > maxSymmetricDiffSize {
+				continue
+			}
+
 			b.Run(fmt.Sprintf("%s_Universe=%d_Diff=%d",
 				mappingType, universeSize, bench.symmetricDiffSize),
 				func(b *testing.B) {

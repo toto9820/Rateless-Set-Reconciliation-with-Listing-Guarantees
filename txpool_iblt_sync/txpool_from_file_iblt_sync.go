@@ -24,17 +24,16 @@ func txpool_sync_from_file_certain_sync() {
 	node1Dir := config.Node1HashesDir
 	node2Dir := config.Node2HashesDir
 
-	iterationCount := 0
 	maxIterations := 15
 	universeSize := uint256.NewInt(0).SetAllOne()
 
-	mappingTypes := []MappingType{EGH, OLS}
+	mappingTypes := []MappingType{EGH}
 
 	for _, mappingType := range mappingTypes {
-		symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_file_symmetric_diff_stats.csv", mappingType))
+		symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_certain_sync_file_symmetric_diff_stats.csv", mappingType))
 
 		for i := 0; i < maxIterations; i++ {
-			iterationCount++
+			iterationCount := i + 1
 
 			node1HashesFilePath := filepath.Join(node1Dir, fmt.Sprintf("node1_txpool_hashes_%d.csv", iterationCount))
 			node2HashesFilePath := filepath.Join(node2Dir, fmt.Sprintf("node2_txpool_hashes_%d.csv", iterationCount))
@@ -42,7 +41,7 @@ func txpool_sync_from_file_certain_sync() {
 			hashes1 := getTransactionsHashesFromFile(node1HashesFilePath)
 			hashes2 := getTransactionsHashesFromFile(node2HashesFilePath)
 
-			symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize)
+			symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize, mappingType)
 			fmt.Printf("MappingType %s, Iteration %d: Symmetric Difference: %d\n", mappingType, iterationCount, symDiffSize)
 
 			err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
@@ -68,7 +67,6 @@ func txpool_sync_from_file_universe_reduce_sync() {
 	node1Dir := config.Node1HashesDir
 	node2Dir := config.Node2HashesDir
 
-	iterationCount := 0
 	maxIterations := 15
 
 	mappingTypes := []MappingType{EGH, OLS}
@@ -81,7 +79,7 @@ func txpool_sync_from_file_universe_reduce_sync() {
 	}
 
 	for i := 0; i < maxIterations; i++ {
-		iterationCount++
+		iterationCount := i + 1
 
 		node1HashesFilePath := filepath.Join(node1Dir, fmt.Sprintf("node1_txpool_hashes_%d.csv", iterationCount))
 		node2HashesFilePath := filepath.Join(node2Dir, fmt.Sprintf("node2_txpool_hashes_%d.csv", iterationCount))
@@ -90,13 +88,13 @@ func txpool_sync_from_file_universe_reduce_sync() {
 		hashes2 := getTransactionsHashesFromFile(node2HashesFilePath)
 
 		for _, mappingType := range mappingTypes {
-			symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_file_symmetric_diff_stats.csv", mappingType))
-
 			for _, deltaSize := range deltaSizes {
-				symDiffSize, totalCells := universeReduceSync(hashes1, hashes2, deltaSize, mappingType)
-				fmt.Printf("MappingType %s, Iteration %d, Delta Size %f: Symmetric Difference: %d, Total Cells: %d\n", mappingType, iterationCount, deltaSize, symDiffSize, totalCells)
+				symmetricDiffStatsFilePath := filepath.Join(cwd, "data", "blockchain", fmt.Sprintf("%s_universe_reduce_sync_file_symmetric_diff_stats_delta_%d.csv", mappingType, uint64(deltaSize)))
 
-				err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
+				symDiffSize, totalTransmittedBits := universeReduceSync(hashes1, hashes2, deltaSize, mappingType)
+				fmt.Printf("MappingType %s, Iteration %d, Delta Size %d: Symmetric Difference: %d, Total Transmitted Bits: %d\n", mappingType, iterationCount, uint64(deltaSize), symDiffSize, totalTransmittedBits)
+
+				err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalTransmittedBits)
 				if err != nil {
 					log.Printf("Error saving symmetric difference stats to CSV: %v", err)
 				}

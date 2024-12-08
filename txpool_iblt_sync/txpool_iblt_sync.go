@@ -42,40 +42,42 @@ func loadConfig(filePath string) (*Config, error) {
 // certainSync generates IBFs for two sets of
 // transaction hashes, compares them, and finds the
 // symmetric difference.
-func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int) (int, uint64) {
-	var ibfNode1, ibfNode2, receivedCells *InvertibleBloomFilter
+func certainSync(hashes1, hashes2 []*uint256.Int, universeSize *uint256.Int, mappingType MappingType) (int, uint64) {
+	var ibfNode1, ibfNode2 *InvertibleBloomFilter
 
-	ibfNode1 = NewIBF(universeSize, &EGHMapping{})
-	ibfNode2 = NewIBF(universeSize, &EGHMapping{})
-	receivedCells = NewIBF(universeSize, &EGHMapping{})
+	var mapping MappingMethod
+	switch mappingType {
+	case EGH:
+		mapping = &EGHMapping{}
+	case OLS:
+		mapping = &OLSMapping{
+			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize.Uint64())))),
+		}
+	default:
+		panic("unsupported mapping type")
+	}
+
+	ibfNode1 = NewIBF(universeSize, mapping)
+	ibfNode2 = NewIBF(universeSize, mapping)
 
 	transmittedBits := uint64(0)
 
 	for {
 		ibfNode1.AddSymbols(hashes1)
 
-		// Start - Simulation of communication //////////////////////////////
-
-		ibfNode1Bytes, err := ibfNode1.Serialize()
-
-		transmittedBits += uint64(len(ibfNode1Bytes)) * 8
-
-		if err != nil {
-			panic(err)
-		}
-
-		receivedCells.Deserialize(ibfNode1Bytes)
-
-		// End - Simulation of communication ////////////////////////////////
+		transmittedBits += ibfNode1.GetTransmittedBitsSize()
 
 		ibfNode2.AddSymbols(hashes2)
 
 		// Subtract the two IBFs
-		ibfDiff := ibfNode2.Subtract(receivedCells)
-		// symmetricDiff, ok := ibfDiff.Decode()
+		ibfDiff := ibfNode2.Subtract(ibfNode1)
 		hashes2Not1, hashes1Not2, ok := ibfDiff.Decode()
 
 		if ok {
+			// Sending back to node1 transactions of 2/1 where each
+			// transaction is 256 bit.
+			transmittedBits += uint64(len(hashes2Not1)) * 256
+
 			return len(hashes2Not1) + len(hashes1Not2), transmittedBits
 		}
 	}
@@ -102,13 +104,13 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		var convertedHashes2Not1, convertedHashes1Not2 []*uint256.Int
 		var ok bool
 		var roundSymmetricDiffSize int
+		var roundTransmittedBits uint64 = 0
 		var ibfDiff *InvertibleBloomFilter
-		// var receivedCells, ibfDiff *InvertibleBloomFilter
 
 		sizeS1 = uint64(len(totalHashes1))
 		sizeS2 = uint64(len(totalHashes2))
-		univerSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
-		universeSize := uint256.NewInt(univerSizeUint64)
+		reducedUniverSizeUint64 := universeSizeReduction(sizeS1, sizeS2, delta)
+		reducedUniverseSize := uint256.NewInt(reducedUniverSizeUint64)
 
 		var mapping MappingMethod
 		switch mappingType {
@@ -116,7 +118,7 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 			mapping = &EGHMapping{}
 		case OLS:
 			mapping = &OLSMapping{
-				Order: uint64(math.Ceil(math.Sqrt(float64(univerSizeUint64)))),
+				Order: uint64(math.Ceil(math.Sqrt(float64(reducedUniverSizeUint64)))),
 			}
 		default:
 			panic("unsupported mapping type")
@@ -124,37 +126,21 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 
 		// Convert each symbol to a reduced symbol
 		// Maps to convert reduced symbol back to original symbol
-		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, universeSize)
-		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, universeSize)
+		convertedHashes1, hashMap1 := certainMapping(totalHashes1, roundNumber, reducedUniverseSize)
+		convertedHashes2, hashMap2 := certainMapping(totalHashes2, roundNumber, reducedUniverseSize)
 
-		ibfNode1 := NewIBF(universeSize, mapping)
-		ibfNode2 := NewIBF(universeSize, mapping)
-
-		// receivedCells = NewIBF(universeSize, mapping)
+		ibfNode1 := NewIBF(reducedUniverseSize, mapping)
+		ibfNode2 := NewIBF(reducedUniverseSize, mapping)
 
 		for {
 			ibfNode1.AddSymbols(convertedHashes1)
 
-			// // Start - Simulation of communication //////////////////////////////
-
-			// ibfNode1Bytes, err := ibfNode1.Serialize()
-
-			// transmittedBits += uint64(len(ibfNode1Bytes)) * 8
-
-			// if err != nil {
-			// 	panic(err)
-			// }
-
-			// receivedCells.Deserialize(ibfNode1Bytes)
-
-			// // End - Simulation of communication ////////////////////////////////
+			roundTransmittedBits = ibfNode1.GetTransmittedBitsSize()
 
 			ibfNode2.AddSymbols(convertedHashes2)
 
 			// Subtract the two IBFs
-			// ibfDiff = ibfNode2.Subtract(receivedCells)
 			ibfDiff = ibfNode2.Subtract(ibfNode1)
-			// symmetricDiff, ok = ibfDiff.Decode()
 			convertedHashes2Not1, convertedHashes1Not2, ok = ibfDiff.Decode()
 
 			roundSymmetricDiffSize = len(convertedHashes2Not1) + len(convertedHashes1Not2)
@@ -164,6 +150,8 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 				break
 			}
 		}
+
+		transmittedBits += roundTransmittedBits
 
 		// Split the symmetric difference into 1\2 and 2\1
 		var hashes1Not2, hashes2Not1 []*uint256.Int
@@ -175,6 +163,15 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		for _, hash := range convertedHashes2Not1 {
 			hashes2Not1 = append(hashes2Not1, hashMap2[hash.String()]...)
 		}
+
+		// Sending to node1 transactions of 2/1 where each
+		// transaction is 256 bit, and 1/2 of converted transactions.
+		transmittedBits += uint64(len(convertedHashes1Not2)*reducedUniverseSize.ByteLen()) * 8
+		transmittedBits += uint64(len(hashes2Not1)) * 256
+
+		// Sending to node2 transactions of 1/2 where each
+		// transaction is 256 bit.
+		transmittedBits += uint64(len(hashes1Not2)) * 256
 
 		// Accumulate found differences
 		allHashes1Not2 = append(allHashes1Not2, hashes1Not2...)
@@ -190,10 +187,6 @@ func universeReduceSync(originalHashes1, originalHashes2 []*uint256.Int, delta f
 		totalHashes1 = addSymbols(totalHashes1, hashes2Not1)
 		totalHashes2 = addSymbols(totalHashes2, hashes1Not2)
 
-		// calculatedOverlapSize := len(originalHashes2) - len(allHashes2Not1)
-		// calculatedHashes1Size := calculatedOverlapSize + len(allHashes1Not2)
-
-		// if calculatedHashes1Size == len(originalHashes1) {
 		if roundSymmetricDiffSize == 0 {
 			totalDiffSize := len(allHashes1Not2) + len(allHashes2Not1)
 			return totalDiffSize, transmittedBits
@@ -249,7 +242,7 @@ func universeSizeReduction(sizeS1 uint64, sizeS2 uint64, delta float64) uint64 {
 		// }
 
 		// delta is collisions threshold
-		if expectedCollisions < delta {
+		if expectedCollisions <= delta {
 			return nr
 		}
 
@@ -317,6 +310,7 @@ func removeSymbols(source []*uint256.Int, toRemove []*uint256.Int) []*uint256.In
 	return result
 }
 
+// addSymbols adds the specified symbols to the source slice
 func addSymbols(source []*uint256.Int, toAdd []*uint256.Int) []*uint256.Int {
 	if len(toAdd) == 0 {
 		return source
@@ -387,6 +381,8 @@ func saveSymmetricDiffStatsToCSV(filePath string, iterationCount int, symDiffSiz
 	return nil
 }
 
+// txpool_sync performs TxPool synchronization between
+// two blockchain nodes in real time.
 func txpool_sync() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -431,6 +427,8 @@ func txpool_sync() {
 
 	iterationCount := 0
 
+	// mappingTypes := []MappingType{EGH, OLS}
+
 	for time.Now().Before(endTime) {
 		iterationCount++
 
@@ -473,7 +471,8 @@ func txpool_sync() {
 		// relevant only for egh for now (ols universe reduction)
 		universeSize := uint256.NewInt(0).SetAllOne()
 
-		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize)
+		// TODO - fix later to support other mapping types.
+		symDiffSize, totalCells := certainSync(hashes1, hashes2, universeSize, EGH)
 		fmt.Printf("Iteration %d: Symmetric Difference: %d\n", iterationCount, symDiffSize)
 
 		err = saveSymmetricDiffStatsToCSV(symmetricDiffStatsFilePath, iterationCount, uint64(symDiffSize), totalCells)
@@ -487,11 +486,13 @@ func txpool_sync() {
 }
 
 func main() {
+	// txpool_sync()
+
 	// txpool_sync_from_nodes_certain_sync()
 
 	// txpool_sync_from_nodes_universe_reduce_sync()
 
-	txpool_sync_from_file_certain_sync()
+	// txpool_sync_from_file_certain_sync()
 
 	txpool_sync_from_file_universe_reduce_sync()
 }

@@ -44,20 +44,18 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 		return alice[i].Cmp(alice[j]) == -1
 	})
 
-	var ibfAlice, ibfBob, receivedCells *InvertibleBloomFilter
+	var ibfAlice, ibfBob *InvertibleBloomFilter
 
 	switch mappingType {
 	case EGH:
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &EGHMapping{})
 	case OLS:
 		olsMapping := OLSMapping{
 			Order: uint64(math.Ceil(math.Sqrt(float64(universeSize)))),
 		}
 		ibfAlice = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 		ibfBob = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
-		receivedCells = NewIBF(uint256.NewInt(uint64(universeSize)), &olsMapping)
 	}
 
 	cost := uint64(0)
@@ -65,24 +63,12 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 	for {
 		ibfAlice.AddSymbols(alice)
 
-		// Start - Simulation of communication //////////////////////////////
-
-		ibfAliceBytes, err := ibfAlice.Serialize()
-
-		cost += uint64(len(ibfAliceBytes))
-
-		if err != nil {
-			panic(err)
-		}
-
-		receivedCells.Deserialize(ibfAliceBytes)
-
-		// End - Simulation of communication ////////////////////////////////
+		cost = ibfAlice.GetTransmittedBitsSize()
 
 		ibfBob.AddSymbols(bob)
 
 		// Subtract the two IBFs and Decode the result to find the differences
-		ibfDiff := ibfBob.Subtract(receivedCells)
+		ibfDiff := ibfBob.Subtract(ibfAlice)
 		bobWithoutAlice, _, ok := ibfDiff.Decode()
 
 		if ok == false {
@@ -94,10 +80,10 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 		}
 	}
 
-	fmt.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits", trialNumber, symmetricDiffSize, cost)
+	fmt.Printf("Trial %d for %s method for CertainSync IBLT, Symmetric Difference len: %d with %d bits", trialNumber, mappingType, symmetricDiffSize, cost)
 	fmt.Println()
 
-	log.Printf("Trial %d for EGH method for CertainSync IBLT, Symmetric Difference len: %d with %d bits\n", trialNumber, symmetricDiffSize, cost)
+	log.Printf("Trial %d for %s method for CertainSync IBLT, Symmetric Difference len: %d with %d bits\n", trialNumber, mappingType, symmetricDiffSize, cost)
 
 	// Return number of bits transmitted
 	return cost
@@ -107,6 +93,7 @@ func runTrialTotalBitsVsUniverseSize(trialNumber int,
 // process with fixed symmetric difference sizes and varying universe sizes.
 func BenchmarkTotalBitsVsUniverseSize(b *testing.B) {
 	symmetricDiffSizes := []int{1, 3, 30, 90}
+
 	universeSizes := []int{
 		int(math.Pow(10, 3)), // 1,000
 		int(math.Pow(10, 4)), // 10,000
