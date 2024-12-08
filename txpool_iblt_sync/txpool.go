@@ -65,6 +65,8 @@ func getTransactionsHashes(txpoolData TxPoolContent) []*uint256.Int {
 	return hashes
 }
 
+// getTransactionsHashesFromFile returns the transaction hashes as
+// an array.
 func getTransactionsHashesFromFile(hashesFilePath string) []*uint256.Int {
 	// var hashes []Symbol
 	var hashes []*uint256.Int

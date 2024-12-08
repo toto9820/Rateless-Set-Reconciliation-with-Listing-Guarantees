@@ -1,10 +1,7 @@
 package certainsync
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"github.com/holiman/uint256"
 )
@@ -19,14 +16,14 @@ var (
 // InvertibleBloomFilter represents the basic CertainSync
 // data structure
 type InvertibleBloomFilter struct {
-	Cells         []IBFCell
-	UniverseSize  *uint256.Int
-	Iteration     uint64
-	Size          uint64
-	MappingMethod MappingMethod
+	Cells         []IBFCell     // Array of IBLT cells
+	UniverseSize  *uint256.Int  // The size of the universe
+	Iteration     uint64        // Current iteration (number of times symbols are added)
+	Size          uint64        // Number of cells in the filter
+	MappingMethod MappingMethod // Method type used for mapping symbols to cells
 }
 
-// NewIBF creates a new InvertibleBloomFilter instance
+// NewIBF creates a new InvertibleBloomFilter instance.
 func NewIBF(universeSize *uint256.Int, mapping MappingMethod) *InvertibleBloomFilter {
 	return &InvertibleBloomFilter{
 		Cells:         nil,
@@ -37,6 +34,7 @@ func NewIBF(universeSize *uint256.Int, mapping MappingMethod) *InvertibleBloomFi
 	}
 }
 
+// Copy copies the contents of another IBF into the current IBF.
 func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 	ibf.Cells = make([]IBFCell, len(ibf2.Cells))
 
@@ -51,10 +49,12 @@ func (ibf *InvertibleBloomFilter) Copy(ibf2 *InvertibleBloomFilter) {
 	ibf.MappingMethod = ibf2.MappingMethod
 }
 
+// AddSymbols adds a list of symbols to the IBF.
 func (ibf *InvertibleBloomFilter) AddSymbols(symbols []*uint256.Int) {
 	ibf.Iteration++
 	additionalCellsCount := ibf.MappingMethod.GetAdditionalCellsCount(ibf.Iteration)
 
+	// Expand the cell array if needed
 	if ibf.Size+additionalCellsCount > uint64(len(ibf.Cells)) {
 		newCapacity := ibf.Size + additionalCellsCount
 
@@ -78,6 +78,7 @@ func (ibf *InvertibleBloomFilter) AddSymbols(symbols []*uint256.Int) {
 	ibf.Size += additionalCellsCount
 }
 
+// Subtract subtracts another IBF from the current one.
 func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *InvertibleBloomFilter {
 	difference := NewIBF(ibf.UniverseSize, ibf.MappingMethod)
 	difference.Copy(ibf)
@@ -89,15 +90,18 @@ func (ibf *InvertibleBloomFilter) Subtract(ibf2 *InvertibleBloomFilter) *Inverti
 	return difference
 }
 
+// Decode attempts to extract the symbols unique to each set represented by the IBF.
+// bWithoutA: Symbols in the second set but not in the first.
+// aWithoutB: Symbols in the first set but not in the second.
+// ok: Whether decoding was successful.
 func (ibf *InvertibleBloomFilter) Decode() (bWithoutA []*uint256.Int, aWithoutB []*uint256.Int, ok bool) {
 	pureList := make([]uint64, 0)
-	// Detecting duplicates
-	// seenSymbols := make(map[*uint256.Int]bool)
 
 	for {
 		n := len(pureList) - 1
 
 		if n == -1 {
+			// Identify pure cells
 			for j := uint64(0); j < ibf.Size; j++ {
 				if ibf.Cells[j].IsPure() {
 					pureList = append(pureList, j)
@@ -124,15 +128,8 @@ func (ibf *InvertibleBloomFilter) Decode() (bWithoutA []*uint256.Int, aWithoutB 
 			aWithoutB = append(aWithoutB, xorSum)
 		}
 
-		// Check for duplicates
-		// if seenSymbols[xorSum] {
-		// 	continue
-		// }
-
-		//symmetricDiff = append(symmetricDiff, xorSum)
-		//seenSymbols[xorSum] = true
-
 		offset := uint64(0)
+		// Removed symbol (xorSum) from cells its mapped to.
 		for i := uint64(1); i <= ibf.Iteration; i++ {
 			cellIdx := offset + ibf.MappingMethod.MapSymbol(xorSum, i)
 
@@ -147,6 +144,7 @@ func (ibf *InvertibleBloomFilter) Decode() (bWithoutA []*uint256.Int, aWithoutB 
 		ibf.Cells[j].Subtract(ibf.Cells[j])
 	}
 
+	// Verify the IBF is empty after decoding
 	for j := uint64(0); j < ibf.Size; j++ {
 		if !ibf.Cells[j].IsZero() {
 			ok = false
@@ -158,6 +156,7 @@ func (ibf *InvertibleBloomFilter) Decode() (bWithoutA []*uint256.Int, aWithoutB 
 	return
 }
 
+// IsEmpty checks if the IBF is empty or not.
 func (ibf *InvertibleBloomFilter) IsEmpty() bool {
 	for _, cell := range ibf.Cells {
 		if !cell.IsZero() {
@@ -167,82 +166,12 @@ func (ibf *InvertibleBloomFilter) IsEmpty() bool {
 	return true
 }
 
-func (ibf *InvertibleBloomFilter) Reset() {
-	ibf.Cells = nil
-	ibf.Size = 0
-}
-
-// GetTransmittedBitsSize returns the bit size of the actively transmitted cells.
-// This reflects only the cells that have been added to the IBF and excludes unutilized cells.
-// Other field of the IBF are either private to him like iteration, or
-// agreed ahead like hash seed, mapping method with others.
+// GetTransmittedBitsSize calculates the bit size of all transmitted cells.
+// This size reflects only the cells used by the IBF.
 func (ibf *InvertibleBloomFilter) GetTransmittedBitsSize() uint64 {
 	var totalSize uint64
 	for _, cell := range ibf.Cells {
 		totalSize += cell.BitsLen()
 	}
 	return totalSize
-}
-
-// Serialize converts the InvertibleBloomFilter into a byte slice
-func (ibf *InvertibleBloomFilter) Serialize() ([]byte, error) {
-	buf := new(bytes.Buffer)
-
-	// Serialize each IBFCell
-	for _, cell := range ibf.Cells {
-		cellBytes, err := cell.Serialize()
-
-		if err != nil {
-			return nil, err
-		}
-
-		cellByteLen := len(cellBytes)
-
-		// Convert the length of the cell to a byte slice
-		lenBytes := []byte{uint8(cellByteLen)} // Serialize the length as uint8
-
-		if _, err := buf.Write(lenBytes); err != nil {
-			return nil, err
-		}
-
-		if _, err := buf.Write(cellBytes); err != nil {
-			return nil, err
-		}
-	}
-
-	ibf.Reset()
-
-	return buf.Bytes(), nil
-}
-
-// Deserialize converts a byte slice back into an InvertibleBloomFilter object.
-// Each cell has its own deserialization method, and the size of each cell is indicated by a uint8 byte.
-func (ibf *InvertibleBloomFilter) Deserialize(data []byte) error {
-	buf := bytes.NewBuffer(data)
-
-	// Iterate through the byte slice, reading one cell at a time
-	for buf.Len() > 0 {
-		var cellSize uint8
-		// Read the size of the current cell
-		if err := binary.Read(buf, binary.LittleEndian, &cellSize); err != nil {
-			return fmt.Errorf("failed to read cell size: %v", err)
-		}
-
-		// Now, read the bytes for the current cell based on its size
-		cellData := make([]byte, cellSize)
-		if _, err := buf.Read(cellData); err != nil {
-			return fmt.Errorf("failed to read cell data: %v", err)
-		}
-
-		// Create the appropriate cell and deserialize the data
-		cell := &IBFCell{}
-		if err := cell.Deserialize(cellData); err != nil {
-			return fmt.Errorf("failed to deserialize IBFCell: %v", err)
-		}
-
-		// Append the deserialized cell to the IBF Cells slice
-		ibf.Cells = append(ibf.Cells, *cell)
-	}
-
-	return nil
 }

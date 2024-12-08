@@ -1,12 +1,20 @@
 package certainsync
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-
 	"github.com/holiman/uint256"
 )
+
+// Static hasher instance
+var cellHasher CellHasher = nil
+
+// SetHasher selects appropriate hash function based on universe size.
+func SetHasher(universeSize *uint256.Int) {
+	if universeSize.IsUint64() {
+		cellHasher = XXHash64Hash{}
+	} else {
+		cellHasher = Sha256Hash{}
+	}
+}
 
 // IBFCell represents a single cell in the Invertible Bloom Filter.
 // It maintains count, XOR sum of elements, and hash sum for verification.
@@ -14,7 +22,6 @@ type IBFCell struct {
 	Count   int64
 	XorSum  *uint256.Int
 	HashSum *uint256.Int
-	Hasher  CellHasher
 }
 
 // NewIBFCell creates a new initialized IBFCell with
@@ -25,25 +32,9 @@ func NewIBFCell(universeSize *uint256.Int) IBFCell {
 		XorSum:  uint256.NewInt(0),
 		HashSum: uint256.NewInt(0),
 	}
-	cell.setHasher(universeSize)
+
+	SetHasher(universeSize)
 	return cell
-}
-
-// setHasher selects appropriate hash function based on universe size
-// to maintain collision probability below 0.1%:
-// 1 - e^(-n(n-1)/(2*m)) < 0.001
-func (c *IBFCell) setHasher(universeSize *uint256.Int) {
-	threshold1 := uint256.NewInt(2500)
-	threshold2 := uint256.NewInt(150_000_000)
-
-	switch {
-	case universeSize.Cmp(threshold1) < 0:
-		c.Hasher = Murmur3Hash{}
-	case universeSize.Cmp(threshold2) < 0:
-		c.Hasher = XXHash64Hash{}
-	default:
-		c.Hasher = Sha256Hash{}
-	}
 }
 
 // Insert adds a symbol to the cell
@@ -54,7 +45,7 @@ func (c *IBFCell) Insert(s *uint256.Int) {
 	c.Count++
 	c.XorSum.Xor(c.XorSum, s)
 
-	symbolHash := c.Hasher.Hash(s.Bytes())
+	symbolHash := cellHasher.Hash(s.Bytes())
 	c.HashSum.Xor(c.HashSum, symbolHash)
 }
 
@@ -72,7 +63,7 @@ func (c *IBFCell) IsPure() bool {
 		return false
 	}
 
-	calcHashSum := c.Hasher.Hash(c.XorSum.Bytes())
+	calcHashSum := cellHasher.Hash(c.XorSum.Bytes())
 	return c.HashSum.Cmp(calcHashSum) == 0
 }
 
@@ -94,94 +85,30 @@ func (c *IBFCell) Clone() IBFCell {
 		Count:   c.Count,
 		XorSum:  uint256.NewInt(0).Set(c.XorSum),
 		HashSum: uint256.NewInt(0).Set(c.HashSum),
-		Hasher:  c.Hasher,
 	}
 }
 
-// ByteLen returns the total size of the cell in bytes, which
-// corresponds to the size of the cell when serialized.
+// ByteLen returns the total size of the cell in bytes.
 func (c *IBFCell) ByteLen() uint8 {
-	return 8 + // Count (int64)
-		uint8(c.XorSum.ByteLen()) +
-		uint8(c.HashSum.ByteLen())
+	// Count (int64)
+	var countBytes uint8 = 8
+
+	var xorSumBytes uint8 = 0
+	var hashSumBytes uint8 = 0
+
+	switch cellHasher.(type) {
+	case XXHash64Hash:
+		xorSumBytes = 8 // 64 bits for XXHash64
+		hashSumBytes = 8
+	case Sha256Hash:
+		xorSumBytes = 32 // 64 bits for Sha256Hash
+		hashSumBytes = 32
+	}
+
+	return countBytes + xorSumBytes + hashSumBytes
 }
 
-// BitsLen returns the total size of the cell in bits, which
-// corresponds to the size of the cell when serialized
+// BitsLen returns the total size of the cell in bits,
 func (c *IBFCell) BitsLen() uint64 {
 	return uint64(c.ByteLen()) * 8
-}
-
-func (c *IBFCell) Serialize() ([]byte, error) {
-	var buf bytes.Buffer
-
-	// Serialize the Count as int64 (8 bytes)
-	if err := binary.Write(&buf, binary.LittleEndian, c.Count); err != nil {
-		return nil, fmt.Errorf("failed to write Count: %v", err)
-	}
-
-	// Serialize XorSum (byte slice)
-	var xorSumLen uint8 = uint8(c.XorSum.ByteLen())
-
-	if err := binary.Write(&buf, binary.LittleEndian, xorSumLen); err != nil {
-		return nil, fmt.Errorf("failed to write XorSum length: %v", err)
-	}
-
-	xorSumBytes := c.XorSum.Bytes()
-
-	if err := binary.Write(&buf, binary.LittleEndian, xorSumBytes); err != nil {
-		return nil, fmt.Errorf("failed to write XorSum: %v", err)
-	}
-
-	// Serialize HashSum (byte slice)
-
-	var hashSumLen uint8 = uint8(c.HashSum.ByteLen())
-
-	if err := binary.Write(&buf, binary.LittleEndian, hashSumLen); err != nil {
-		return nil, fmt.Errorf("failed to write HashSum length: %v", err)
-	}
-
-	hashSumBytes := c.HashSum.Bytes()
-
-	if err := binary.Write(&buf, binary.LittleEndian, hashSumBytes); err != nil {
-		return nil, fmt.Errorf("failed to write HashSum: %v", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// Deserialize converts a byte slice back into an IBFCell object
-func (c *IBFCell) Deserialize(data []byte) error {
-	buf := bytes.NewBuffer(data)
-
-	// Deserialize the Count field
-	if err := binary.Read(buf, binary.LittleEndian, &c.Count); err != nil {
-		return fmt.Errorf("failed to read Count: %v", err)
-	}
-
-	// Deserialize the XorSum field as a byte slice
-	var xorSumLen uint8
-	if err := binary.Read(buf, binary.LittleEndian, &xorSumLen); err != nil {
-		return fmt.Errorf("failed to read XorSum length: %v", err)
-	}
-
-	xorSumBytes := make([]byte, xorSumLen)
-	if err := binary.Read(buf, binary.LittleEndian, &xorSumBytes); err != nil {
-		return fmt.Errorf("failed to read XorSum: %v", err)
-	}
-	c.XorSum = uint256.NewInt(0).SetBytes(xorSumBytes)
-
-	// Deserialize the HashSum field as a byte slice
-	var hashSumLen uint8
-	if err := binary.Read(buf, binary.LittleEndian, &hashSumLen); err != nil {
-		return fmt.Errorf("failed to read HashSum length: %v", err)
-	}
-
-	hashSumBytes := make([]byte, hashSumLen)
-	if err := binary.Read(buf, binary.LittleEndian, &hashSumBytes); err != nil {
-		return fmt.Errorf("failed to read HashSum: %v", err)
-	}
-	c.HashSum = uint256.NewInt(0).SetBytes(hashSumBytes)
-
-	return nil
 }
