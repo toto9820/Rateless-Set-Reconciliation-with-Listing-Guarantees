@@ -23,7 +23,7 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 	universeSize int,
 	symmetricDiffSizes []int,
 	mappingType MappingType,
-	rng *rand.Rand) []uint64 {
+	rng *rand.Rand) []float64 {
 	// For superset assumption
 	// Bob's set will include all elements from 1 to universeSize.
 	bob := make([]*uint256.Int, 0, universeSize)
@@ -69,8 +69,9 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 	}
 
 	// Prepare a results list for storing the number of cells for each symmetric difference size
-	results := make([]uint64, len(symmetricDiffSizes))
+	results := make([]float64, len(symmetricDiffSizes))
 	idx := 0
+	prevSymmetricDiffSize := 0
 	curSymmetricDiffSize := 0
 	transmittedBits := uint64(0)
 	prevTransmittedBits := uint64(0)
@@ -90,9 +91,12 @@ func runTrialAdditionalBitsVsDiffSize(trialNumber int,
 
 			for (idx < len(symmetricDiffSizes)) &&
 				(curSymmetricDiffSize >= symmetricDiffSizes[idx]) {
-				results[idx] = transmittedBits - prevTransmittedBits
-				prevTransmittedBits = transmittedBits
-
+				//results[idx] = transmittedBits - prevTransmittedBits
+				if curSymmetricDiffSize != prevSymmetricDiffSize {
+					results[idx] = float64(transmittedBits-prevTransmittedBits) / float64(curSymmetricDiffSize-prevSymmetricDiffSize)
+					prevTransmittedBits = transmittedBits
+					prevSymmetricDiffSize = curSymmetricDiffSize
+				}
 				idx++
 			}
 		}
@@ -119,10 +123,12 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
-	numTrials := 10
+	// numTrials := 10
+	numTrials := 1
 	universeSize := int(math.Pow(10, 6))
 
-	mappingTypes := []MappingType{EGH, OLS}
+	// mappingTypes := []MappingType{EGH, OLS}
+	mappingTypes := []MappingType{OLS}
 
 	for _, mappingType := range mappingTypes {
 		if mappingType == OLS {
@@ -153,11 +159,11 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 
 		writer.Write([]string{"Symmetric Diff Size", "Additional Bits Transmitted"})
 
-		aggregatedAdditionalBits := make([]int64, len(symmetricDiffSizes))
+		aggregatedAdditionalBits := make([]float64, len(symmetricDiffSizes))
 		globalSeed := time.Now().UnixNano()
 
 		b.Run(fmt.Sprintf("Universe=%d, Max Diff=%d", universeSize, symmetricDiffSizes[len(symmetricDiffSizes)-1]), func(b *testing.B) {
-			results := make(chan []uint64, numTrials)
+			results := make(chan []float64, numTrials)
 
 			var wg sync.WaitGroup
 			wg.Add(numTrials)
@@ -179,7 +185,7 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 
 			for trialResult := range results {
 				for idx, additionalCells := range trialResult {
-					aggregatedAdditionalBits[idx] += int64(additionalCells)
+					aggregatedAdditionalBits[idx] += float64(additionalCells)
 				}
 			}
 		})
