@@ -41,14 +41,9 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 
 	// numTrials := 10
 	numTrials := 1
-	// numTrials := 10
-	numTrials := 1
 	universeSize := int(math.Pow(10, 6))
 
-	// mappingTypes := []MappingType{EGH, OLS}
-	mappingTypes := []MappingType{OLS}
-	// mappingTypes := []MappingType{EGH, OLS}
-	mappingTypes := []MappingType{OLS}
+	mappingTypes := []MappingType{EGH, OLS}
 
 	for _, mappingType := range mappingTypes {
 		filename := fmt.Sprintf("%s_additional_bits_vs_diff_size_set_inside_set.csv", string(mappingType))
