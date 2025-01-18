@@ -39,8 +39,10 @@ func BenchmarkAdditionalBitsVsDiffSize(b *testing.B) {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
-	// numTrials := 10
-	numTrials := 1
+	// For Debugging
+	//numTrials := 1
+
+	numTrials := 10
 	universeSize := int(math.Pow(10, 6))
 
 	mappingTypes := []MappingType{EGH, OLS}
